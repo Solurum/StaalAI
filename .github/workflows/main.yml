@@ -103,7 +103,7 @@ jobs:
 
          # Triggering SonarCloud analysis as results of it are required by Quality Gate check.
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v2
+        uses: sonarsource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # needed for PR decoration
           SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
@@ -114,7 +114,7 @@ jobs:
       
       # Check the Quality Gate status.
       - name: SonarCloud Quality Gate check
-        uses: sonarsource/sonarqube-quality-gate-action@v2
+        uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           pollingTimeoutSec: 600
         env:
