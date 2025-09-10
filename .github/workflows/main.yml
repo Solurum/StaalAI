@@ -78,11 +78,14 @@ jobs:
       - name: Install SonarCloud scanner
         run: dotnet tool install dotnet-sonarscanner --global
 
-      - name: Prepare SonarCloud Variables (lowercase org)
+      - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
-        shell: pwsh
         run: |
-          "lowerCaseOwner=$('{0}' -f '${{ github.repository_owner }}').ToLower()" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          import os
+          env_file = os.getenv('GITHUB_ENV')
+          with open(env_file, "a") as myfile:
+               myfile.write("lowerCaseOwner=" + str.lower("${{ github.repository_owner }}"))
+        shell: python
 
       - name: Get SonarCloud Status
         id: get-sonarcloud-status
