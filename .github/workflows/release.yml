@@ -1,0 +1,72 @@
+name: Release Pipeline
+permissions: write-all
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+.[0-9]+-**"
+      - "[0-9]+.[0-9]+.[0-9]+-**"
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Install NuGetPreBuildApplyBranchOrTag
+        run: dotnet tool install Skyline.DataMiner.CICD.Tools.NuGetPreBuildApplyBranchOrTag --global
+
+      - name: Find .sln file
+        id: findSlnFile
+        shell: bash
+        run: |
+          if [[ -z "${SOLUTION_NAME}" ]]; then
+            sln="$(find . -type f -name '*.sln' | sort -r | head -n 1)"
+          else
+            sln="$(find . -type f -name "${SOLUTION_NAME}")"
+          fi
+          if [[ -z "$sln" ]]; then
+            echo "No solution (.sln) file found." >&2
+            exit 1
+          fi
+          echo "solutionFilePath=$sln" >> "$GITHUB_OUTPUT"
+
+      - name: Apply Branch and output path for pre-release NuGet
+        if: github.ref_type == 'branch'
+        run: NuGetPreBuildApplyBranchOrTag --workspace "${{ github.workspace }}" --tag " " --branch "${{ github.ref_name }}" --build "${{ github.run_number }}" --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+
+      - name: Apply Tag and output path for Release NuGet
+        if: github.ref_type == 'tag'
+        run: NuGetPreBuildApplyBranchOrTag --workspace "${{ github.workspace }}" --tag "${{ github.ref_name }}" --branch " " --build "${{ github.run_number }}" --nugetResultFolder "${{ github.workspace }}/_NuGetResults" --solution-filepath "${{ steps.findSlnFile.outputs.solutionFilePath }}"
+
+      - name: Build
+        run: dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" --configuration Release -nodeReuse:false
+
+      - name: Find NuGet packages
+        id: findcreatednuget
+        shell: bash
+        run: |
+          mapfile -t files < <(find ${{ github.workspace }}/_NuGetResults -type f -name '*.nupkg')
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No .nupkg files found in _NuGetResults" >&2
+            exit 1
+          fi
+          printf 'nugetPackageName=%s\n' "${files[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Push to NuGet.org
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.nugetApiKey }}
+        run: |
+          IFS=$'\n'
+          for pkg in ${{ steps.findcreatednuget.outputs.nugetPackageName }}; do
+            dotnet nuget push "$pkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+          done
+          unset IFS
+
+
