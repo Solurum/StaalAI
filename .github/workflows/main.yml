@@ -3,15 +3,10 @@ permissions: write-all
 on:
   push:
     branches:
-      - '**'
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
-      - "[0-9]+.[0-9]+.[0-9]+"
-      - "[0-9]+.[0-9]+.[0-9]+.[0-9]+-**"
-      - "[0-9]+.[0-9]+.[0-9]+-**"
+      - 'master'
   pull_request:
     branches:
-      - '**'
+      - 'master'
   workflow_dispatch:
 
 jobs:
