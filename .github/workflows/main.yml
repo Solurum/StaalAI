@@ -98,6 +98,18 @@ jobs:
           resp="$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_NAME}" || true)"
           echo "sonarCloudProjectStatus=$resp" >> "$GITHUB_OUTPUT"
 
+      - name: Trigger Initial Analysis
+        if: fromJson(steps.get-sonarcloud-status.outputs.sonarCloudProjectStatus).projectStatus.status  == 'NONE'
+        uses: sonarsource/sonarqube-scan-action@v5.3.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # needed for PR decoration
+          SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ vars.SONAR_NAME }}
+            -Dsonar.organization=${{ env.lowerCaseOwner }}
+        continue-on-error: true
+
          # Triggering SonarCloud analysis as results of it are required by Quality Gate check.
       - name: SonarCloud Scan
         uses: sonarsource/sonarqube-scan-action@v5.3.1
