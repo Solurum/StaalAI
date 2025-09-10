@@ -75,9 +75,6 @@ jobs:
         run: dotnet test "${{ steps.findSlnFile.outputs.solutionFilePath }}" --filter TestCategory!=IntegrationTest --logger "trx;logfilename=unitTestResults.trx" --collect "XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,opencover
         continue-on-error: true
 
-      - name: Install SonarCloud scanner
-        run: dotnet tool install dotnet-sonarscanner --global
-
       - name: Prepare SonarCloud Variables
         id: prepSonarCloudVar
         run: |
@@ -103,7 +100,7 @@ jobs:
 
          # Triggering SonarCloud analysis as results of it are required by Quality Gate check.
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@master
+        uses: sonarsource/sonarqube-scan-action@v5.3.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # needed for PR decoration
           SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
@@ -114,7 +111,7 @@ jobs:
       
       # Check the Quality Gate status.
       - name: SonarCloud Quality Gate check
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
         with:
           pollingTimeoutSec: 600
         env:
