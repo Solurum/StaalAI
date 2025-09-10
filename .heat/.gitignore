@@ -1,0 +1,6 @@
+# Ignore nothing in this folder
+*
+
+# Re-allow everything inside this folder
+!*/
+!*
