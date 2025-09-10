@@ -101,31 +101,26 @@ jobs:
           resp="$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_NAME}" || true)"
           echo "sonarCloudProjectStatus=$resp" >> "$GITHUB_OUTPUT"
 
-      # Triggering SonarQube analysis as results of it are required by Quality Gate check.
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
+         # Triggering SonarCloud analysis as results of it are required by Quality Gate check.
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@v2
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # needed for PR decoration
+          SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ vars.SONAR_NAME }}
+            -Dsonar.organization=${{ env.lowerCaseOwner }}
+      
       # Check the Quality Gate status.
-      - name: SonarQube Quality Gate check
-        id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
+      - name: SonarCloud Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@v2
         with:
           pollingTimeoutSec: 600
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN:   ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
           
-      - name: SonarCloud Quality Gate check
-        id: sonarcloud-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@v1
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
-        continue-on-error: true
-        timeout-minutes: 5
-
       - name: Quality Gate
         id: quality-step
         shell: python
