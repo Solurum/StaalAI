@@ -101,17 +101,21 @@ jobs:
           resp="$(curl -s -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_NAME}" || true)"
           echo "sonarCloudProjectStatus=$resp" >> "$GITHUB_OUTPUT"
 
-      - name: Analyze (regular)
+      # Triggering SonarQube analysis as results of it are required by Quality Gate check.
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_NAME: ${{ vars.SONAR_NAME }}
-        run: |
-          dotnet sonarscanner begin /k:"${{ env.SONAR_NAME }}" /o:"${{ env.lowerCaseOwner }}" /d:sonar.token="${{ env.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.cs.vstest.reportsPaths="**/TestResults/**.trx"
-          dotnet build "${{ steps.findSlnFile.outputs.solutionFilePath }}" --configuration Release -nodeReuse:false
-          dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
-        continue-on-error: true
 
+      # Check the Quality Gate status.
+      - name: SonarQube Quality Gate check
+        id: sonarqube-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          pollingTimeoutSec: 600
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          
       - name: SonarCloud Quality Gate check
         id: sonarcloud-quality-gate-check
         uses: sonarsource/sonarqube-quality-gate-action@v1
