@@ -1,0 +1,9 @@
+﻿Never make any changes to MasterPrompt.txt
+Avoid adding async. Keeps things single-threaded where possible to avoid complexity.
+Prefer to use interfaces, classes and polymorphism above inheritence.
+Avoid the use of the ASP.NET Dependency Injection Framework beyond what already exists.
+Preference to classic Factory or Builder patterns.
+Preference to Public and Private.
+Make sure dependency injection and interfaces are used in classes where applicable so they can be unit-tested.
+Stick to <TargetFramework>net8.0</TargetFramework>
+Above all, always prefer simplicity of code.

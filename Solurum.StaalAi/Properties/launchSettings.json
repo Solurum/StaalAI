@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Solurum.StaalAi": {
+      "commandName": "Project",
+      "commandLineArgs": "generate -pf \"C:\\Users\\stael\\source\\repos\\TestingStaalAI\\initialPrompt.txt\" -wd \"C:\\Users\\stael\\source\\repos\\TestingStaalAI\" --debug "
+    }
+  }
+}
