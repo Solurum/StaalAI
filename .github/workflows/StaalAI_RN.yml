@@ -7,14 +7,13 @@ on:
     types: [created]
 
 permissions:
-  contents: write         # needed to push a branch and commit
-  pull-requests: write    # needed to open a PR
-  issues: read            # read the issue payload
+  contents: write
+  pull-requests: write
+  issues: read
 
 jobs:
   create-pr-from-issue:
     runs-on: ubuntu-latest
-    # Only handle comments on issues (not PRs)
     if: ${{ github.event_name != 'issue_comment' || github.event.issue.pull_request == null }}
 
     steps:
@@ -38,14 +37,11 @@ jobs:
           ISSUE_NUMBER=${{ github.event.issue.number }}
           BRANCH="issue-${ISSUE_NUMBER}"
 
-          # Check if remote branch exists
           if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
-            echo "Remote branch $BRANCH exists. Checking out and pulling latest..."
             git fetch origin "$BRANCH"
             git checkout "$BRANCH"
             git pull --ff-only origin "$BRANCH"
           else
-            echo "Remote branch $BRANCH does not exist. Creating from master..."
             git checkout -b "$BRANCH" master
           fi
 
@@ -62,7 +58,6 @@ jobs:
             echo "${{ github.event.issue.body }}"
             echo
             echo "Comments:"
-            # Use gh to fetch comments as JSON, then jq to print only the body text lines
             gh issue view ${{ github.event.issue.number }} \
               --repo ${{ github.repository }} \
               --json comments \
@@ -79,15 +74,34 @@ jobs:
             git push origin "${{ steps.branch.outputs.branch_name }}"
           fi
 
-      - name: Create or update Pull Request to master
+      - name: Create or update Pull Request to master (title = issue title)
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
-          PR_TITLE="Add lastprompt.txt for issue #${{ github.event.issue.number }}"
+          PR_TITLE="${{ github.event.issue.title }}"
           PR_BODY="Auto-generated from [issue #${{ github.event.issue.number }}](${{ github.event.issue.html_url }})."
 
-          # Try to create a PR; if it exists, just update the body
-          if ! gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base master --head "${{ steps.branch.outputs.branch_name }}"; then
-            echo "PR may already exist. Updating body..."
-            gh pr edit --title "$PR_TITLE" --body "$PR_BODY" --base master --head "${{ steps.branch.outputs.branch_name }}"
+          if ! gh pr create \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY" \
+              --base master \
+              --head "${{ steps.branch.outputs.branch_name }}"; then
+            gh pr edit \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY" \
+              --base master \
+              --head "${{ steps.branch.outputs.branch_name }}"
           fi
+
+          # Output PR number for later steps
+          PR_NUMBER=$(gh pr view --head "${{ steps.branch.outputs.branch_name }}" --json number --jq .number)
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR with prompt contents
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.number }}" \
+            --repo "${{ github.repository }}" \
+            --body-file lastprompt.txt
