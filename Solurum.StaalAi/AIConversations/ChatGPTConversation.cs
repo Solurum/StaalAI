@@ -55,6 +55,12 @@
         // Track up to which message index we've counted bytesIn previously
         private int lastSentMessageIndex = 0;
 
+        // Limit amount of errors. Before stopping.
+
+        int maxConsecutiveErrors = 10;
+        int currentConsecutiveErrors = 0;
+
+
         public ChatGPTConversation(ILogger logger, IFileSystem fs, string workingDirPath, string openApiToken, string openApiModel)
         {
             this.DefaultModel = openApiModel ?? throw new ArgumentNullException(nameof(openApiModel));
@@ -230,7 +236,8 @@
                             }
                             catch (Exception ex)
                             {
-                                logger.LogError(ex, "Error while handling ChatGPT response.");
+                                logger.LogError(ex, "Critical Error while handling ChatGPT response. Stopping.");
+                                running = false;
                             }
                         }
                     }
@@ -304,9 +311,12 @@
                 {
                     cmd.Execute(logger, this, fs, workingDirPath);
                 }
+
+                currentConsecutiveErrors = 0;
             }
             catch (Exception ex)
             {
+                
                 logger.LogError(ex, "Could not parse ChatGPT Response. Requesting YAML-only resend.");
 
                 var repair =
@@ -323,13 +333,29 @@ type: STAAL_STATUS
 statusMsg: |- 
   (your lines here)
 
-If you need output of files, please resend content request commands. 
-"
-;
-
-                // Send the repair instruction into the conversation
-                AddReplyToBuffer(repair, "FORMAT_REPAIR");
-                SendNextBuffer();
+Please use only the following command types. For full details, see the initial prompt.
+type: STAAL_CONTENT_REQUEST
+type: STAAL_CONTENT_DELETE
+type: STAAL_CONTENT_CHANGE
+type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+type: STAAL_CI_LIGHT_REQUEST
+type: STAAL_CI_HEAVY_REQUEST
+type: STAAL_FINISH_OK
+type: STAAL_FINISH_NOK
+type: STAAL_STATUS
+type: STAAL_CONTINUE
+";
+                currentConsecutiveErrors++;
+                if (currentConsecutiveErrors < maxConsecutiveErrors)
+                {
+                    // Send the repair instruction into the conversation
+                    AddReplyToBuffer(repair, "FORMAT_REPAIR");
+                    SendNextBuffer();
+                }
+                else
+                {
+                    throw;
+                }
             }
 
             SendNextBuffer();
