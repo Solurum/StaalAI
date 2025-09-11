@@ -1,10 +1,22 @@
-Title: Update all documentation and readme
+Title: Fix crash when succesfully completing
 
 Description:
-We need to go through all the code, cleanup all documentation and readme.
-Don't adjust any actual logic or tests.
+Everytime this tool finishes succesfully it seems to log as a crash. We need to fix this.
+For example:
+ [16:06:39 INF] ChatGPT conversation stopped. Duration: 429s | API Calls: 9 | Bytes In: 62401 | Bytes Out: 19747 | Input Tokens: 83754 | Output Tokens: 15665 | Est. Cost (USD): $0.0105
+[16:06:39 ERR] Critical Error while handling ChatGPT response. Stopping.
+System.InvalidOperationException: Conversation not started. Call Start() first.
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.SendNextBuffer() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 113
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.HandleResponses(String response) in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 353
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.<Start>b__29_0() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 235
+[16:06:39 DBG] Finished GenerateCommand.
+[16:06:39 DBG] Hosting stopping
+[16:06:39 INF] Application is shutting down...
+[16:06:39 DBG] Hosting stopped
 
-The ReadMe should describe how to use the tool, written without emoticons and professionally.
-Add code examples for the different ways the tool can be used.
+This was a valid conversation, it stopped correctly. But something either throws an exception after that point or it's incorrectly seeing this.
+The fact I see "Conversation not started. Call Start() first.  would be to first thing I would look for. One of the possibilities is that we're maybe still getting code running after we stopped the conversation.
+
+Try to achieve this with minimal code changes, focus on fixing this problem.
 
 Comments:
