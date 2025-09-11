@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.AIConversations
+namespace Solurum.StaalAi.AIConversations
 {
     using System;
     using System.ClientModel;
@@ -314,6 +314,11 @@
                 foreach (var cmd in allCommands)
                 {
                     cmd.Execute(logger, this, fs, workingDirPath);
+                    if (!running)
+                    {
+                        // Conversation was stopped by a command; stop processing further commands.
+                        break;
+                    }
                 }
 
                 currentConsecutiveErrors = 0;
@@ -329,113 +334,3 @@ Rules:
 - Plain text is not allowed. If you need to report progress, send a STAAL_STATUS with statusMsg: |-.
 - Each YAML doc must start with: type: STAAL_...
 - Separate docs with exactly:
-=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
-- No code fences. No prose. Indentation 2 spaces. LF newlines only.
-
-If your previous message was progress text, convert it to:
-type: STAAL_STATUS
-statusMsg: |- 
-  (your lines here)
-
-Please use only the following command types.
-";
-
-                repair += fs.File.ReadAllText("AllowedCommands.txt");
-                currentConsecutiveErrors++;
-                if (currentConsecutiveErrors < maxConsecutiveErrors)
-                {
-                    // Send the repair instruction into the conversation
-                    AddReplyToBuffer(repair, "FORMAT_REPAIR");
-                    SendNextBuffer();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            SendNextBuffer();
-        }
-
-        // ------------------------
-        // Pruning implementation
-        // ------------------------
-        private void PruneHistoryIfNeeded()
-        {
-            int approxTokens = ApproximateTokens(history);
-            if (approxTokens <= MaxTokenBudget) return;
-
-            int systemIndex = history.FindIndex(m => m is SystemChatMessage);
-            if (systemIndex < 0) systemIndex = 0; // safety
-
-            int preserveTailStart = Math.Max(history.Count - PreserveNewestTurns, systemIndex + 1);
-
-            int i = Math.Max(systemIndex + 1, 0);
-            while (i < preserveTailStart && approxTokens > TargetTokenBudget && history.Count > (preserveTailStart - i))
-            {
-                var removed = history[i];
-                approxTokens -= ApproximateTokens(removed);
-                history.RemoveAt(i);
-                preserveTailStart = Math.Max(history.Count - PreserveNewestTurns, systemIndex + 1);
-            }
-
-            while (approxTokens > TargetTokenBudget && history.Count > (systemIndex + 1 + 2))
-            {
-                int removableIdx = Math.Max(systemIndex + 1, history.Count - 1 - 2); // keep last 2 msgs
-                var removed = history[removableIdx];
-                approxTokens -= ApproximateTokens(removed);
-                history.RemoveAt(removableIdx);
-            }
-
-            if (lastSentMessageIndex > history.Count)
-                lastSentMessageIndex = history.Count;
-        }
-
-        private static int ApproximateTokens(IEnumerable<ChatMessage> messages)
-        {
-            int sum = 0;
-            foreach (var m in messages)
-                sum += ApproximateTokens(m);
-            return sum;
-        }
-
-        private static int ApproximateTokens(ChatMessage message)
-        {
-            string text = ExtractAllText(message);
-            int chars = text.Length;
-            int tokens = chars / ApproxCharsPerToken;
-            tokens += 8; // overhead cushion per message
-            return tokens;
-        }
-
-        private static string ExtractAllText(ChatMessage message)
-        {
-            var sb = new StringBuilder();
-            var content = message?.Content;
-            if (content != null && content.Count > 0)
-            {
-                foreach (var part in content) // ChatMessageContent is enumerable in 2.4.0
-                {
-                    if (!string.IsNullOrEmpty(part.Text))
-                        sb.Append(part.Text);
-                }
-            }
-            return sb.ToString();
-        }
-
-        private static string ExtractAssistantTopText(ChatCompletion completion)
-        {
-            if (completion?.Content != null && completion.Content.Count > 0)
-            {
-                var sb = new StringBuilder();
-                foreach (var part in completion.Content) // ChatMessageContent is enumerable
-                {
-                    if (!string.IsNullOrEmpty(part.Text))
-                        sb.Append(part.Text);
-                }
-                return sb.ToString();
-            }
-            return string.Empty;
-        }
-    }
-}
