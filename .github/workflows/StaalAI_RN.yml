@@ -47,29 +47,30 @@ jobs:
 
           echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
           
-      - name: Write lastprompt.txt with issue content (plain text)
+      - name: Write lastprompt.txt with issue content (safe)
         env:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
-          # Title
-          printf "Title: %s\n\n" "${{ github.event.issue.title }}" > lastprompt.txt
+          set -euo pipefail
       
-          # Description
+          # Get the whole issue in one shot
+          issue_json="$(gh issue view "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --json title,body,comments)"
+      
+          # Extract fields
+          title="$(printf '%s' "$issue_json" | jq -r '.title')"
+          body="$(printf '%s' "$issue_json" | jq -r '.body')"
+      
+          # Build the file safely (no heredocs)
           {
-            echo "Description:"
-            # Use heredoc with single quotes to prevent interpolation/escaping issues
-            cat <<'EOF'
-            ${{ github.event.issue.body }}
-            EOF
-                  echo
-                  echo "Comments:"
-                } >> lastprompt.txt
-            
-                # Append comments (one per line)
-                gh issue view "${{ github.event.issue.number }}" \
-                  --repo "${{ github.repository }}" \
-                  --json comments \
-                | jq -r '.comments[]?.body' >> lastprompt.txt
+            printf 'Title: %s\n\n' "$title"
+            echo 'Description:'
+            printf '%s\n\n' "$body"
+            echo 'Comments:'
+            printf '%s' "$issue_json" | jq -r '.comments[]?.body'
+          } > lastprompt.txt
+
 
       - name: Commit and push changes
         run: |
