@@ -1,10 +1,7 @@
-Title: Update all documentation and readme
+Title: Add all missing XML code documentation.
 
 Description:
-We need to go through all the code, cleanup all documentation and readme.
-Don't adjust any actual logic or tests.
-
-The ReadMe should describe how to use the tool, written without emoticons and professionally.
-Add code examples for the different ways the tool can be used.
+The current code does not have much if any valid XML Code Documentation.
+Go through all the sourcecode and add valid XML Code Documentation for all public classes and methods.
 
 Comments:
