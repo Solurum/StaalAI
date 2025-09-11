@@ -17,10 +17,46 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Link to this workflow run for convenience in the PR comment
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
+      - name: Require label "StaalAI" and commenter permission >= write
+        id: authz
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+            const commenter = context.payload.comment.user.login;
+
+            // Check commenter permission level
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner, repo, username: commenter
+            });
+            const allowedPerms = ['write','maintain','admin'];
+            const hasWriteOrAbove = allowedPerms.includes(perm.permission);
+
+            // Ensure PR has label "StaalAI"
+            const labels = await github.paginate(
+              github.rest.issues.listLabelsOnIssue,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const hasLabel = labels.some(l => l.name.toLowerCase() === 'staalai');
+
+            core.setOutput('hasWriteOrAbove', String(hasWriteOrAbove));
+            core.setOutput('hasLabel', String(hasLabel));
+            core.setOutput('ok', String(hasWriteOrAbove && hasLabel));
+
+            if (!hasWriteOrAbove) core.info(`Commenter @${commenter} lacks write+ (has: ${perm.permission}).`);
+            if (!hasLabel) core.info(`Label "StaalAI" not present on PR #${issue_number}.`);
+
+      - name: Stop if not authorized / not labeled
+        if: steps.authz.outputs.ok != 'true'
+        run: |
+          echo "Blocked: requires PR label 'StaalAI' AND commenter with write+ permissions." >&2
+          exit 1
+
       - name: Set up GitHub CLI
         run: gh --version
 
@@ -30,16 +66,14 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
           PR_NUMBER="${{ github.event.issue.number }}"
-          # Fetch PR head branch and title
           HEAD_REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
           PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json title --jq .title)
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-          # For commit message
-          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PR_TITLE" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF"   >> "$GITHUB_OUTPUT"
+          echo "pr_title<<EOF"        >> "$GITHUB_OUTPUT"
+          echo "$PR_TITLE"            >> "$GITHUB_OUTPUT"
+          echo "EOF"                  >> "$GITHUB_OUTPUT"
 
       - name: Check out PR head branch
         uses: actions/checkout@v4
@@ -90,17 +124,29 @@ jobs:
             echo "no_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Post PR comment with run link
+      - name: Post PR comment with run result
         if: always()
         env:
           GH_TOKEN: ${{ secrets.PAT }}
+          JOB_STATUS: ${{ job.status }}   # "success", "failure", "cancelled"
         run: |
-          PR_NUMBER="${{ steps.prmeta.outputs.pr_number }}"
+          PR_NUMBER="${{ github.event.issue.number }}"
+
+          # Changes line
           if [ "${{ steps.commit.outputs.no_changes }}" = "true" ]; then
-            COMMENT_BODY="StaalAI run completed. No changes were generated.\n\nView logs: $RUN_URL"
+            CHANGE_LINE="No changes were generated."
           else
-            COMMENT_BODY="StaalAI has suggested and pushed code changes to this PR.\n\nView logs: $RUN_URL"
+            CHANGE_LINE="StaalAI pushed code changes."
           fi
 
-          # Important: Do NOT include the trigger phrase to avoid loops
+          # Status line
+          if [ "$JOB_STATUS" = "success" ]; then
+            STATUS_LINE="✅ Pipeline **succeeded**."
+          elif [ "$JOB_STATUS" = "cancelled" ]; then
+            STATUS_LINE="⏹️ Pipeline **was cancelled**."
+          else
+            STATUS_LINE="❌ Pipeline **failed**."
+          fi
+
+          COMMENT_BODY="$STATUS_LINE\n\n$CHANGE_LINE\n\nView logs: $RUN_URL"
           gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$COMMENT_BODY"
