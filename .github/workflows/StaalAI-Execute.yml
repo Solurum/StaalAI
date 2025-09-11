@@ -68,7 +68,7 @@ jobs:
           StaalOpenApiToken: ${{ secrets.OPENAPITOKEN }}
           StaalOpenApiModel: ${{ vars.OPENAPIMODEL }}
         run: |
-          solurum.staalai generate \
+          StaalAI generate \
             -pf "$GITHUB_WORKSPACE/lastprompt.txt" \
             -wd "$GITHUB_WORKSPACE" \
             --debug
