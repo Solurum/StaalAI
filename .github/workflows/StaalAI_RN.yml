@@ -87,24 +87,35 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
+          set -euo pipefail
+      
           PR_TITLE="${{ github.event.issue.title }}"
           PR_BODY="Auto-generated from [issue #${{ github.event.issue.number }}](${{ github.event.issue.html_url }})."
-
-          if ! gh pr create \
+          HEAD="${{ steps.branch.outputs.branch_name }}"
+          BASE="master"
+      
+          # Try to create the PR (succeeds only if one doesn't already exist)
+          if gh pr create \
               --title "$PR_TITLE" \
               --body "$PR_BODY" \
-              --base master \
-              --head "${{ steps.branch.outputs.branch_name }}"; then
-            gh pr edit \
-              --title "$PR_TITLE" \
-              --body "$PR_BODY" \
-              --base master \
-              --head "${{ steps.branch.outputs.branch_name }}"
+              --base "$BASE" \
+              --head "$HEAD" >/dev/null 2>&1; then
+            echo "Created new PR."
+          else
+            echo "PR likely exists. Updating it…"
+            # Find existing PR number for this head branch
+            PR_NUMBER="$(gh pr list --head "$HEAD" --state all --json number --jq '.[0].number')"
+            if [ -z "${PR_NUMBER:-}" ]; then
+              echo "Failed to find an existing PR for head '$HEAD' and creation failed." >&2
+              exit 1
+            fi
+            gh pr edit "$PR_NUMBER" --title "$PR_TITLE" --body "$PR_BODY"
           fi
-
+      
           # Output PR number for later steps
-          PR_NUMBER=$(gh pr view --head "${{ steps.branch.outputs.branch_name }}" --json number --jq .number)
+          PR_NUMBER="$(gh pr list --head "$HEAD" --state all --json number --jq '.[0].number')"
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
 
       - name: Comment on PR with prompt contents
         env:
