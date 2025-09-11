@@ -84,3 +84,6 @@ Newline and integrity metadata are supported: newline: LF|CRLF, endsWithFinalNew
 Remember for multiple commands in a response:
 Place the separator line exactly as:
 =====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+
+NEVER send any file-content that contains =====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+Only use that as a separator between your YAML documents.

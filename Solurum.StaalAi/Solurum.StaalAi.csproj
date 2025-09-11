@@ -8,8 +8,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Solurum.StaalAi</AssemblyName>
     <RootNamespace>Solurum.StaalAi</RootNamespace>
-    <PackageVersion>1.0.0-alpha3</PackageVersion>
-    <Version>1.0.0-alpha3</Version>
+    <PackageVersion>1.0.4-alpha1</PackageVersion>
+    <Version>1.0.4-alpha1</Version>
     <PackageTags>AI;CodeGen</PackageTags>
     <!--<PackageProjectUrl></PackageProjectUrl>-->
     <PackageReadmeFile>README.md</PackageReadmeFile>

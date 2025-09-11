@@ -75,11 +75,13 @@
         // Adds user content directly to history (chunking >60k, appending "..." on all but last chunk)
         public void AddReplyToBuffer(string message, string originalCommand)
         {
+            logger.LogDebug("Adding Message to Buffer...");
             if (message == null) message = string.Empty;
             if (originalCommand == null) originalCommand = string.Empty;
 
             if (message.Length <= ChunkSize)
             {
+                logger.LogDebug("Message is small enough. Adding directly.");
                 string payload = originalCommand + " - " + message;
                 history.Add(new UserChatMessage(payload));
                 return;
@@ -89,6 +91,7 @@
             int chunkIndex = 0;
             int totalChunks = (message.Length + ChunkSize - 1) / ChunkSize;
 
+            logger.LogDebug("Message is too big. Chunking per 60K characters.");
             while (idx < message.Length)
             {
                 int len = Math.Min(ChunkSize, message.Length - idx);
@@ -97,7 +100,7 @@
 
                 string payload = originalCommand + " - " + chunk + (moreComing ? "..." : string.Empty);
                 history.Add(new UserChatMessage(payload));
-
+                logger.LogDebug("Added a chunk.");
                 idx += len;
                 chunkIndex++;
             }
@@ -118,8 +121,13 @@
 
             PruneHistoryIfNeeded();
 
+            logger.LogDebug("Sending new chat history, waiting on response...");
+            ChatCompletionOptions opt = new ChatCompletionOptions();
             var completionRsp = chat.CompleteChat(history);
             var completion = completionRsp.Value;
+
+            logger.LogDebug("Received AI Response..");
+
             apiCalls++;
 
             // Count new user bytes since last call
@@ -133,6 +141,8 @@
             }
 
             var assistantText = ExtractAssistantTopText(completion);
+            logger.LogDebug($"Raw Response: {assistantText}");
+
             bytesOut += Encoding.UTF8.GetByteCount(assistantText);
 
             try
@@ -154,6 +164,10 @@
             if (!string.IsNullOrEmpty(assistantText))
             {
                 responses.Add(assistantText);
+            }
+            else
+            {
+                responses.Add("ERR: Nothing received");
             }
 
             return true;
@@ -196,6 +210,7 @@
             bytesIn += Encoding.UTF8.GetByteCount(initialPrompt);
 
             var firstReply = ExtractAssistantTopText(completion);
+            logger.LogDebug($"Raw Response: {firstReply}");
             bytesOut += Encoding.UTF8.GetByteCount(firstReply);
 
             try
@@ -264,8 +279,12 @@
             {
                 responses.Add(firstReply);
             }
+            else
+            {
+                responses.Add("ERR: Empty");
+            }
 
-            responseThread.Join();
+                responseThread.Join();
         }
 
         public void Stop()
@@ -335,7 +354,7 @@ Rules:
 - Plain text is not allowed. If you need to report progress, send a STAAL_STATUS with statusMsg: |-.
 - Each YAML doc must start with: type: STAAL_...
 - Separate docs with exactly:
-"+ StaalSeparator.value + $@"
+" + StaalSeparator.value + $@"
 - No code fences. No prose. Indentation 2 spaces. LF newlines only.
 
 If your previous message was progress text, convert it to:
