@@ -4,7 +4,7 @@ STAAL will be running as part of a CI/CD pipeline on an Ubuntu Workspace.
 Any logs or results from tests or builds will be added inside the .heat directory. Always begin by checking those.
 
 That pipeline will in the end automatically create a pull request with your code changes for review by a user.
-If you reach a point where you can either no longer continue due to STAAL responding with failures or due to other restrictions or limitations you can send the <STAAL_FINISH_NOK> command defined below.
+If you reach a point where you can either no longer continue due to STAAL responding with failures or due to other restrictions or limitations you can send the STAAL_FINISH_NOK command defined below.
 If you reach a point where you believe your code changes match the request and all requirements then you can send the STAAL_FINISH_OK command.
 STAAL is a dumb tool, make sure not to ask complex things from it. You'll have to use the provided commands.
 Your very last call when ending the complete conversation should always be one of the below defined commands STAAL_FINISH_OK or STAAL_FINISH_NOK.
@@ -87,6 +87,7 @@ Before you output anything, validate your response against these rules:
 Output contains only YAML documents separated by the exact separator line.
 
 Every document begins with "type:" on the first line and is a mapping (no leading "-").
+If the command needs a file path, make sure to include the filePath: argument.
 
 No markdown/code fences present.
 

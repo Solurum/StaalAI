@@ -14,6 +14,8 @@
     using OpenAI;
     using OpenAI.Chat;     // OpenAI 2.4.0 SDK (NuGet: OpenAI)
 
+    using Serilog.Core;
+
     using Solurum.StaalAi.AICommands;
     using Solurum.StaalAi.Commands;
 
@@ -185,8 +187,10 @@
             PruneHistoryIfNeeded();
 
             // First round to open the session
+            logger.LogInformation("Initial Prompt Sent, waiting on response...");
             var completionRsp = chat.CompleteChat(history);
             var completion = completionRsp.Value;
+            logger.LogInformation("Initial Prompt response received.");
 
             apiCalls++;
             bytesIn += Encoding.UTF8.GetByteCount(initialPrompt);

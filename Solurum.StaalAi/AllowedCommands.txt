@@ -3,7 +3,6 @@ YAML EXAMPLES SHOWN BELOW; USE THE SEPARATOR LINE BETWEEN DOCUMENTS
 
 Place the separator line exactly as:
 =====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
-Do not use any other separator (such as =====).”
 
 Do not output any text before the first type: line. The very first non-empty line of each document must be type:.
 
@@ -33,7 +32,7 @@ Required fields:
     type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
 
 Command: STAAL_CI_LIGHT_REQUEST
-Description: Run lightweight CI; results appear under .heat.
+Description: Run lightweight CI; results appear and overwrite previous results under .heat/latest
 Required fields:
     type: STAAL_CI_LIGHT_REQUEST
 
