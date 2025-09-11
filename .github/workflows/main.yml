@@ -1,0 +1,106 @@
+name: StaalAI-Execute-On-PR-Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write          # push commits
+  pull-requests: write     # comment on PRs
+
+jobs:
+  run-staalai:
+    # Only run when the comment is on a PR and contains the trigger phrase
+    if: >
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, 'StaalAI: Execute')
+    runs-on: ubuntu-latest
+
+    env:
+      # Link to this workflow run for convenience in the PR comment
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Set up GitHub CLI
+        run: gh --version
+
+      - name: Derive PR metadata
+        id: prmeta
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          PR_NUMBER="${{ github.event.issue.number }}"
+          # Fetch PR head branch and title
+          HEAD_REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json title --jq .title)
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          # For commit message
+          echo "pr_title<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PR_TITLE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Check out PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.prmeta.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.PAT }}
+
+      - name: Configure Git user
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Solurum.StaalAI dotnet tool (global)
+        run: |
+          dotnet tool install Solurum.StaalAI --global
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Run StaalAI generate
+        env:
+          StaalOpenApiToken: ${{ secrets.OPENAPITOKEN }}
+          StaalOpenApiModel: ${{ vars.OPENAPIMODEL }}
+        run: |
+          solurum.staalai generate \
+            -pf "$GITHUB_WORKSPACE/lastprompt.txt" \
+            -wd "$GITHUB_WORKSPACE" \
+            --debug
+
+      - name: Commit and push changes (if any)
+        id: commit
+        env:
+          PR_TITLE: ${{ steps.prmeta.outputs.pr_title }}
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "No changes to commit."
+          else
+            COMMIT_MSG="StaalAI Suggests Code Changes for PR ${PR_TITLE}"
+            git commit -m "$COMMIT_MSG"
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            git push origin "$CURRENT_BRANCH"
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post PR comment with run link
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          PR_NUMBER="${{ steps.prmeta.outputs.pr_number }}"
+          if [ "${{ steps.commit.outputs.no_changes }}" = "true" ]; then
+            COMMENT_BODY="StaalAI run completed. No changes were generated.\n\nView logs: $RUN_URL"
+          else
+            COMMENT_BODY="StaalAI has suggested and pushed code changes to this PR.\n\nView logs: $RUN_URL"
+          fi
+
+          # Important: Do NOT include the trigger phrase to avoid loops
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$COMMENT_BODY"
