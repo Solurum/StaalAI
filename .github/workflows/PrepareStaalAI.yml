@@ -39,25 +39,19 @@ jobs:
           git checkout -b "$BRANCH"
           echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Write lastprompt.txt with full issue JSON
+      - name: Write lastprompt.txt with issue content
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
         run: |
-          # Extract the .issue object from the event payload and write it to lastprompt.txt
-          jq '.issue' "$GITHUB_EVENT_PATH" > lastprompt.txt
-
-          # Also append a human-friendly summary at the top
           {
-            echo "### Issue Summary"
-            echo "Number: #${{ github.event.issue.number }}"
             echo "Title: ${{ github.event.issue.title }}"
-            echo "Author: ${{ github.event.issue.user.login }}"
-            echo "URL: ${{ github.event.issue.html_url }}"
-            echo "Created: ${{ github.event.issue.created_at }}"
             echo
-            echo "Labels: $(printf '%s\n' "${{ toJson(github.event.issue.labels) }}" | jq -r 'map(.name) | join(", ")')"
+            echo "Description:"
+            echo "${{ github.event.issue.body }}"
             echo
-            echo "----"
-            echo
-          } | cat - lastprompt.txt > lastprompt.txt.tmp && mv lastprompt.txt.tmp lastprompt.txt
+            echo "Comments:"
+            gh issue comments ${{ github.event.issue.number }} --repo ${{ github.repository }} --json body --jq '.[].body'
+          } > lastprompt.txt
 
       - name: Commit and push changes
         run: |
@@ -67,7 +61,7 @@ jobs:
 
       - name: Create Pull Request to master
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           gh pr create \
             --title "Add lastprompt.txt for issue #${{ github.event.issue.number }}" \
