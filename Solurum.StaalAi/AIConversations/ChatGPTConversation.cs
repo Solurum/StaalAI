@@ -228,6 +228,15 @@
             history.Add(new AssistantChatMessage(completion));
             lastSentMessageIndex = history.Count;
 
+            if (!string.IsNullOrEmpty(firstReply))
+            {
+                responses.Add(firstReply);
+            }
+            else
+            {
+                responses.Add("ERR: Empty");
+            }
+
             running = true;
 
             // Start background consumer AFTER running=true so it can loop
@@ -272,19 +281,8 @@
                 Name = "ChatGPTConversationResponseThread"
             };
             responseThread.Start();
-
-            // Queue first reply for handling (do this after thread started; if you prefer,
-            // you can queue before and the Take() will pick it up once thread starts)
-            if (!string.IsNullOrEmpty(firstReply))
-            {
-                responses.Add(firstReply);
-            }
-            else
-            {
-                responses.Add("ERR: Empty");
-            }
-
-                responseThread.Join();
+            logger.LogDebug("Started Response Thread, main thread blocked until finished.");
+            responseThread.Join();
         }
 
         public void Stop()

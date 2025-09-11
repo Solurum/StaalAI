@@ -63,3 +63,79 @@ Command: STAAL_CONTINUE
 Description: Request next chunk when a response ends with "...".
 Required fields:
     type: STAAL_CONTINUE
+
+
+---------------------------------------------
+
+Examples of valid responses:
+IMPORTANT: when copying these, make sure the example file paths are replaced with the ones received from the STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+
+EXAMPLE ONE 
+-----------
+
+type:STAAL_STATUS
+statusMsg: |-
+I'm ready to start. I will perform some actions.
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_CONTENT_REQUEST
+filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiHeavyRequest.cs
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_CONTENT_REQUEST
+filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiLightRequest.cs
+
+EXAMPLE TWO
+-----------
+
+type: STAAL_CONTENT_CHANGE
+filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalStatus.cs
+newContent: |-
+namespace Solurum.StaalAi.AICommands
+{
+using Solurum.StaalAi.AIConversations;
+
+  public sealed class StaalStatus : IStaalCommand
+  {
+      public string Type { get; set; } = string.Empty;
+      public string StatusMsg { get; set; } = string.Empty;
+
+      public void Execute(ILogger logger, IConversation conversation, IFileSystem fs, string workingDirPath)
+      {
+          logger.LogInformation(StatusMsg);
+          conversation.AddReplyToBuffer($"OK: {StatusMsg}", "[STAAL_STATUS]");
+      }
+  }
+
+
+}
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_CONTENT_DELETE
+filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/ObsoleteCommand.cs
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_STATUS
+statusMsg: |-
+Parsed working directory. Preparing a light CI run next.
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_CI_LIGHT_REQUEST
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_STATUS
+statusMsg: |-
+Light CI completed; reviewing .heat/latest results. If all green, proceeding to check for new files.
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+type: STAAL_FINISH_OK
+prMessage: |-
+
+Summary
+
+Implemented StaalStatus with structured logging and conversation feedback.
+
+Removed ObsoleteCommand.cs.
+
+Ran light and heavy CI; no regressions detected.
+
+Notes
+
+No breaking changes.
