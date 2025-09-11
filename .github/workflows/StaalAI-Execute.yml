@@ -1,4 +1,4 @@
-name: StaalAI-Execute-On-PR-Comment
+name: StaalAI-Execute
 
 on:
   issue_comment:
