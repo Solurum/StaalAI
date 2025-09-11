@@ -71,7 +71,7 @@
                 prompt.AppendLine(file);
             }
 
-            prompt.AppendLine("To complete the request, you'll likely need to ask and parse content of some of these files. Use the STAAL commands to request file content.");
+            prompt.AppendLine("To complete the request, you'll likely need to ask and parse content of some of these files. Use the STAAL_CONTENT_REQUEST commands with absolure filePath to request file content.");
             prompt.AppendLine("-----");
 
             string pathToHeatBuild = fs.Path.Combine(workingDirPath, ".heat", "build");
@@ -98,7 +98,7 @@
                 prompt.AppendLine($"Please always consider files in {pathToPipelineOutput}. These contain results from a previous pipeline/workflow run on this code. Ask the content for the files, then perform the necessary research and then potential changes to address all potential reported issues that may not have been presented with other files, while continuing working towards the previously stated Final Goal and staying within restrictions.");
             }
 
-            prompt.AppendLine("Always include at least one of the STAAL commands in your responses to avoid the conversation stalling. Never add a STAAL command in your response unless you intend for STAAL to execute this. Respond with a status command that says that you're ready to begin and a brief summary of maximum 5 lines of text on what you'll try to do. Remember only reply with valid YAML documents.");
+            prompt.AppendLine("Always include at least one of the STAAL commands in your responses to avoid the conversation stalling. Never add a STAAL command in your response unless you intend for STAAL to execute this. Respond with STAAL_STATUS command that says that you're ready to begin and a brief summary of maximum 10 lines of text on what you'll try to do. Remember only reply with valid YAML documents as described here.");
             return prompt.ToString();
         }
     }

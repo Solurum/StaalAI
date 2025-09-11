@@ -20,6 +20,7 @@ Follow the restrictions and requirements defined within "iron.staal.txt" files t
 These files contains AI-specific rules to follow.
 Every "iron.staal.txt" file applies to the files next to and below it it in the directory structure.
 If a rule between different applicable "iron.staal.txt" files contradicts, always prioritize the information from the closest "iron.staal.txt" file.
+Always run STAAL_CI_LIGHT_REQUEST (see commands below), check the results in the .heat directory and fix any reported problems before finishing.
 
 STRICT OUTPUT FORMAT (YAML ONLY):
 
@@ -80,21 +81,6 @@ For full-file writes, include the complete file content every time (even for sma
 
 Newline and integrity metadata are supported: newline: LF|CRLF, endsWithFinalNewline: true|false, lengthBytes, sha256.
 
-SELF-VALIDATION BEFORE SENDING:
-
-Before you output anything, validate your response against these rules:
-
-Output contains only YAML documents separated by the exact separator line.
-
-Every document begins with "type:" on the first line and is a mapping (no leading "-").
-If the command needs a file path, make sure to include the filePath: argument.
-
-No markdown/code fences present.
-
-All multi-line or code-like values are literal blocks (| or |-), not quoted strings.
-
-No tabs; indentation is 2 spaces.
-
-If your draft fails validation, do not send it. Rewrite it until it passes.
-
-If you cannot produce a valid response due to missing inputs or persistent errors, send a single STAAL_FINISH_NOK with an errMessage explaining precisely what is missing.
+Remember for multiple commands in a response:
+Place the separator line exactly as:
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====

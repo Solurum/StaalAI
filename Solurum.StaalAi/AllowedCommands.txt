@@ -1,9 +1,6 @@
 ﻿ALLOWED COMMANDS
 YAML EXAMPLES SHOWN BELOW; USE THE SEPARATOR LINE BETWEEN DOCUMENTS
 
-Place the separator line exactly as:
-=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
-
 Do not output any text before the first type: line. The very first non-empty line of each document must be type:.
 
 Command: STAAL_CONTENT_REQUEST
@@ -19,7 +16,7 @@ Required fields:
     filePath: /absolute/path/to/file.ext
 
 Command: STAAL_CONTENT_CHANGE (full file replace/create)
-Description: Replace or create a file. Always include full content.
+Description: Replace or create a file. Always include full content. Recommended to run STAAL_CI_LIGHT_REQUEST and consider results in .heat/latest after all your changes.
 Required fields:
     type: STAAL_CONTENT_CHANGE
     filePath: /absolute/path/to/file.ext

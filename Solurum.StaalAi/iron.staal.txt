@@ -1,4 +1,5 @@
 ﻿Never make any changes to MasterPrompt.txt
+Never make changes to StaalSeparator.cs
 Avoid adding async. Keeps things single-threaded where possible to avoid complexity.
 Prefer to use interfaces, classes and polymorphism above inheritence.
 Avoid the use of the ASP.NET Dependency Injection Framework beyond what already exists.

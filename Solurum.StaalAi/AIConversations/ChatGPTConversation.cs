@@ -313,6 +313,12 @@
 
                 foreach (var cmd in allCommands)
                 {
+                    if (!running)
+                    {
+                        // Conversation was stopped by a command; stop processing further commands.
+                        break;
+                    }
+
                     cmd.Execute(logger, this, fs, workingDirPath);
                 }
 
@@ -329,7 +335,7 @@ Rules:
 - Plain text is not allowed. If you need to report progress, send a STAAL_STATUS with statusMsg: |-.
 - Each YAML doc must start with: type: STAAL_...
 - Separate docs with exactly:
-=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+"+ StaalSeparator.value + $@"
 - No code fences. No prose. Indentation 2 spaces. LF newlines only.
 
 If your previous message was progress text, convert it to:
