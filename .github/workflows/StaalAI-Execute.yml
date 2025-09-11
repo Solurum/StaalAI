@@ -5,12 +5,11 @@ on:
     types: [created]
 
 permissions:
-  contents: write          # push commits
-  pull-requests: write     # comment on PRs
+  contents: write
+  pull-requests: write
 
 jobs:
   run-staalai:
-    # Only run when the comment is on a PR and contains the trigger phrase
     if: >
       github.event.issue.pull_request != null &&
       contains(github.event.comment.body, 'StaalAI: Execute')
@@ -30,31 +29,26 @@ jobs:
             const issue_number = context.payload.issue.number;
             const commenter = context.payload.comment.user.login;
 
-            // Check commenter permission level
-            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner, repo, username: commenter
-            });
-            const allowedPerms = ['write','maintain','admin'];
-            const hasWriteOrAbove = allowedPerms.includes(perm.permission);
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: commenter });
+            const hasWriteOrAbove = ['write','maintain','admin'].includes(perm.permission);
 
-            // Ensure PR has label "StaalAI"
-            const labels = await github.paginate(
-              github.rest.issues.listLabelsOnIssue,
-              { owner, repo, issue_number, per_page: 100 }
-            );
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, { owner, repo, issue_number, per_page: 100 });
             const hasLabel = labels.some(l => l.name.toLowerCase() === 'staalai');
 
             core.setOutput('hasWriteOrAbove', String(hasWriteOrAbove));
             core.setOutput('hasLabel', String(hasLabel));
             core.setOutput('ok', String(hasWriteOrAbove && hasLabel));
 
-            if (!hasWriteOrAbove) core.info(`Commenter @${commenter} lacks write+ (has: ${perm.permission}).`);
-            if (!hasLabel) core.info(`Label "StaalAI" not present on PR #${issue_number}.`);
-
       - name: Stop if not authorized / not labeled
         if: steps.authz.outputs.ok != 'true'
         run: |
-          echo "Blocked: requires PR label 'StaalAI' AND commenter with write+ permissions." >&2
+          MSG="Blocked: requires PR label 'StaalAI' AND commenter with write+ permissions."
+          echo "$MSG" >&2
+          {
+            echo "AUTH_ERROR<<EOF"
+            echo "$MSG"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
           exit 1
 
       - name: Set up GitHub CLI
@@ -128,18 +122,16 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ secrets.PAT }}
-          JOB_STATUS: ${{ job.status }}   # "success", "failure", "cancelled"
+          JOB_STATUS: ${{ job.status }}
         run: |
           PR_NUMBER="${{ github.event.issue.number }}"
 
-          # Changes line
           if [ "${{ steps.commit.outputs.no_changes }}" = "true" ]; then
             CHANGE_LINE="No changes were generated."
           else
             CHANGE_LINE="StaalAI pushed code changes."
           fi
 
-          # Status line
           if [ "$JOB_STATUS" = "success" ]; then
             STATUS_LINE="✅ Pipeline **succeeded**."
           elif [ "$JOB_STATUS" = "cancelled" ]; then
@@ -148,5 +140,10 @@ jobs:
             STATUS_LINE="❌ Pipeline **failed**."
           fi
 
-          COMMENT_BODY="$STATUS_LINE\n\n$CHANGE_LINE\n\nView logs: $RUN_URL"
+          EXTRA=""
+          if [ -n "${AUTH_ERROR}" ]; then
+            EXTRA="\n\n**Error:** ${AUTH_ERROR}"
+          fi
+
+          COMMENT_BODY="$STATUS_LINE$EXTRA\n\n$CHANGE_LINE\n\nView logs: $RUN_URL"
           gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$COMMENT_BODY"
