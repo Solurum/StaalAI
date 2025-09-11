@@ -26,21 +26,30 @@ public static class StaalYamlCommandParser
     {
         if (string.IsNullOrWhiteSpace(bundle)) return Array.Empty<IStaalCommand>();
 
-        // 1) Prefer the exact separator. If missing, accept bare "=====" lines as fallback.
+        // 0) FIRST: extract fenced YAML blocks (```yaml/```yml or ~~~yaml/~~~yml).
+        // If we find any, we ONLY parse those blocks and ignore surrounding prose.
+        var fenced = ExtractFencedYamlBlocks(bundle);
         List<string> docs;
-        if (bundle.Contains(Separator, StringComparison.Ordinal))
+
+        if (fenced.Count > 0)
         {
+            docs = fenced;
+        }
+        else if (bundle.Contains(Separator, StringComparison.Ordinal))
+        {
+            // 1) Prefer the exact separator.
             // Preserve docs EXACTLY as-is (no trimming), because YAML '|' needs trailing LF.
             docs = bundle.Split(Separator, StringSplitOptions.None).ToList();
         }
         else
         {
-            docs = FallbackSplitOnEqualsLine(bundle); // preserves exact text segments
+            // 2) Accept bare "=====" lines as fallback (preserves exact text segments).
+            docs = FallbackSplitOnEqualsLine(bundle);
         }
 
-        // 2) Drop pure-whitespace docs; DO NOT trim ends (preserve block scalars).
-        //    Also, if a doc has stray prose before the first "type:", strip lines until the first 'type:'.
-        docs = docs.Select(RemoveLeadingNonYamlUntilType)
+        // 3) Drop pure-whitespace docs; DO NOT trim ends (preserve block scalars).
+        //    Also, strip any leading prose until the first YAML-looking key.
+        docs = docs.Select(RemoveLeadingNonYaml)
                    .Where(s => !string.IsNullOrWhiteSpace(s))
                    .ToList();
 
@@ -80,10 +89,8 @@ public static class StaalYamlCommandParser
             }
 
             // If we reach here, this chunk could not be parsed into a command.
-            // In the single-doc case, honor the test expectation and throw.
             if (singleDoc)
                 throw new InvalidOperationException("YAML command missing 'type'.");
-
             // Otherwise, skip bad doc and continue (robustness for multi-doc bundles).
         }
 
@@ -139,6 +146,41 @@ public static class StaalYamlCommandParser
 
     // --- helpers ---
 
+    /// <summary>
+    /// Extracts all fenced YAML blocks (```yaml / ```yml, or ~~~yaml / ~~~yml).
+    /// Preserves the inner content EXACTLY as-is (no trimming).
+    /// If none are found, returns an empty list.
+    /// </summary>
+    private static List<string> ExtractFencedYamlBlocks(string s)
+    {
+        var docs = new List<string>();
+
+        // Matches:
+        //   - Opening fence of backticks or tildes, length >= 3, captured as group 1
+        //   - Optional whitespace, then language "yaml" or "yml" (case-insensitive), then rest of the line
+        //   - Newline
+        //   - Lazy capture (group 2) of everything up to a closing fence with the exact same delimiter
+        //   - Closing fence on its own line (optionally preceded by whitespace)
+        //
+        // Flags: Singleline (dot matches newline) + Multiline (^ and $ per line)
+        var rx = new Regex(
+            @"(?ims)^[ \t]*([`~]{3,})[ \t]*(?:ya?ml)\b[^\n]*\n(.*?)[ \t]*\n[ \t]*\1[ \t]*$",
+            RegexOptions.CultureInvariant);
+
+        var matches = rx.Matches(s);
+        foreach (Match m in matches)
+        {
+            if (m.Success)
+            {
+                // Group 2 is the inner block. Preserve exactly as captured.
+                var content = m.Groups[2].Value;
+                docs.Add(content);
+            }
+        }
+
+        return docs;
+    }
+
     private static List<string> FallbackSplitOnEqualsLine(string s)
     {
         var docs = new List<string>();
@@ -162,28 +204,30 @@ public static class StaalYamlCommandParser
         return docs;
     }
 
-    private static string RemoveLeadingNonYamlUntilType(string s)
+    private static string RemoveLeadingNonYaml(string s)
     {
         if (string.IsNullOrEmpty(s)) return string.Empty;
 
         using var sr = new StringReader(s);
         string? line;
         var sb = new StringBuilder();
-        bool keep = false;
-        bool foundType = false;
+        bool started = false;
+
+        // Very permissive YAML key matcher: <non-#, non-space><...>:
+        var keyLine = new Regex(@"^\s*[^#\s][^:]*\s*:\s*");
 
         while ((line = sr.ReadLine()) != null)
         {
-            if (!keep && line.TrimStart().StartsWith("type:", StringComparison.Ordinal))
+            if (!started)
             {
-                keep = true;
-                foundType = true;
+                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
+                if (!keyLine.IsMatch(line)) continue;   // still prose → skip
+                started = true;                          // first YAML-looking key
             }
-            if (keep) sb.AppendLine(line);
+            sb.AppendLine(line);
         }
 
-        // If we never saw a "type:" line, DO NOT strip—return the original text unchanged.
-        // This allows the single-doc logic to throw "missing 'type'".
-        return foundType ? sb.ToString() : s;
+        // If we never found a key line, return original so single-doc logic can throw
+        return started ? sb.ToString() : s;
     }
 }

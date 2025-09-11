@@ -20,7 +20,7 @@
     public class ChatGPTConversation : IConversation
     {
         private const int ChunkSize = 60000;
-    
+
 
         // --- Pruning knobs ---
         private const int ApproxCharsPerToken = 4;       // coarse heuristic
@@ -57,7 +57,7 @@
 
         // Limit amount of errors. Before stopping.
 
-        int maxConsecutiveErrors = 10;
+        int maxConsecutiveErrors = 3;
         int currentConsecutiveErrors = 0;
 
 
@@ -316,11 +316,11 @@
             }
             catch (Exception ex)
             {
-                
+
                 logger.LogError(ex, "Could not parse ChatGPT Response. Requesting YAML-only resend.");
 
                 var repair =
-        @"Please resend your previous message as YAML-only commands.
+        $@"Could not parse your response due to exception {ex}. Please resend your previous message as YAML-only commands.
 Rules:
 - Plain text is not allowed. If you need to report progress, send a STAAL_STATUS with statusMsg: |-.
 - Each YAML doc must start with: type: STAAL_...
@@ -333,18 +333,10 @@ type: STAAL_STATUS
 statusMsg: |- 
   (your lines here)
 
-Please use only the following command types. For full details, see the initial prompt.
-type: STAAL_CONTENT_REQUEST
-type: STAAL_CONTENT_DELETE
-type: STAAL_CONTENT_CHANGE
-type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
-type: STAAL_CI_LIGHT_REQUEST
-type: STAAL_CI_HEAVY_REQUEST
-type: STAAL_FINISH_OK
-type: STAAL_FINISH_NOK
-type: STAAL_STATUS
-type: STAAL_CONTINUE
+Please use only the following command types.
 ";
+
+                repair += fs.File.ReadAllText("AllowedCommands.txt");
                 currentConsecutiveErrors++;
                 if (currentConsecutiveErrors < maxConsecutiveErrors)
                 {

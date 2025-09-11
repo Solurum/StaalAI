@@ -20,14 +20,14 @@
                 }
                 else
                 {
-                    string errorMessage = $"ERR: requested file does not start with {workingDirPath} so is blocked from deletion. Only files in the designated working directory can be adjusted.";
+                    string errorMessage = $"ERR: requested file does not start with {workingDirPath} so is blocked from deletion. Only files in the designated working directory can be adjusted. If this continues to happen please respond with STAAL_FINISH_NOK command.";
                     logger.LogError(errorMessage);
                     conversation.AddReplyToBuffer(errorMessage, originalCommand);
                 }
             }
             catch (Exception ex)
             {
-                string errorMessage = $"ERR: Could not delete file {FilePath} with exception {ex}";
+                string errorMessage = $"ERR: Could not delete file {FilePath} with exception {ex}. If this continues to happen please respond with STAAL_FINISH_NOK command.";
                 logger.LogError(errorMessage);
                 conversation.AddReplyToBuffer(errorMessage, originalCommand);
             }

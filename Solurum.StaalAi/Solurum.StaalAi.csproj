@@ -23,9 +23,13 @@
     <Description>Intended to iteratively run and combine several LLM's and CI/CD test results for accurate code generation.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="AllowedCommands.txt" />
     <None Remove="MasterPrompt.txt" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="AllowedCommands.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="MasterPrompt.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

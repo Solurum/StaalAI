@@ -29,6 +29,8 @@
 
             prompt.AppendLine("Always follow these unbreakable laws:");
             prompt.Append(fs.File.ReadAllText("MasterPrompt.txt"));
+            prompt.AppendLine();
+            prompt.Append(fs.File.ReadAllText("AllowedCommands.txt"));
 
             prompt.AppendLine("Without breaking previous restrictions:");
             switch (mode)
@@ -75,13 +77,13 @@
             string pathToHeatBuild = fs.Path.Combine(workingDirPath, ".heat", "build");
             if (fs.Directory.Exists(pathToHeatBuild))
             {
-                prompt.AppendLine($"Please always consider files in {pathToHeatBuild}. Errors during code compilation were detected and must be tackled first. Ask the content for the files, then perform the necessary research and then changes to fix any compilation issues while continuing working towards the previously stated Final Goal and staying within restrictions.");
+                prompt.AppendLine($"Please always consider files in {pathToHeatBuild}. Errors during code compilation might have been detected and must be tackled first. Ask the content for the files, then perform the necessary research and then changes to fix any compilation issues while continuing working towards the previously stated Final Goal and staying within restrictions.");
             }
 
             string pathToHeatTests = fs.Path.Combine(workingDirPath, ".heat", "tests");
             if (fs.Directory.Exists(pathToHeatTests))
             {
-                prompt.AppendLine($"Please always consider files in {pathToHeatTests}. Test Errors were detected and must be tackled first. Ask the content for the files, then perform the necessary research and then changes to fix all issues that caused the failed tests while continuing working towards the previously stated Final Goal and staying within restrictions.");
+                prompt.AppendLine($"Please always consider files in {pathToHeatTests}. Test Errors may have been detected and must be tackled first. Ask the content for the files, then perform the necessary research and then changes to fix all issues that caused the failed tests while continuing working towards the previously stated Final Goal and staying within restrictions.");
             }
 
             string pathToCodeAnalysis = fs.Path.Combine(workingDirPath, ".heat", "codeanalysis");
@@ -96,7 +98,7 @@
                 prompt.AppendLine($"Please always consider files in {pathToPipelineOutput}. These contain results from a previous pipeline/workflow run on this code. Ask the content for the files, then perform the necessary research and then potential changes to address all potential reported issues that may not have been presented with other files, while continuing working towards the previously stated Final Goal and staying within restrictions.");
             }
 
-            prompt.AppendLine("Always include at least one of the STAAL commands in your responses to avoid the conversation stalling. Never add a STAAL command in your response unless you intend for STAAL to execute this. Respond with a status command that says that you're ready to begin and a brief summary of maximum 5 lines of text on what you'll try to do.");
+            prompt.AppendLine("Always include at least one of the STAAL commands in your responses to avoid the conversation stalling. Never add a STAAL command in your response unless you intend for STAAL to execute this. Respond with a status command that says that you're ready to begin and a brief summary of maximum 5 lines of text on what you'll try to do. Remember only reply with valid YAML documents.");
             return prompt.ToString();
         }
     }

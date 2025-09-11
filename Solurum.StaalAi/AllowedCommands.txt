@@ -1,0 +1,69 @@
+﻿ALLOWED COMMANDS
+YAML EXAMPLES SHOWN BELOW; USE THE SEPARATOR LINE BETWEEN DOCUMENTS
+
+Place the separator line exactly as:
+=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====
+Do not use any other separator (such as =====).”
+
+Do not output any text before the first type: line. The very first non-empty line of each document must be type:.
+
+Command: STAAL_CONTENT_REQUEST
+Description: Request file content for the filePath.
+Required fields:
+    type: STAAL_CONTENT_REQUEST
+    filePath: /absolute/path/to/file.ext
+
+Command: STAAL_CONTENT_DELETE
+Description: Delete a file.
+Required fields:
+    type: STAAL_CONTENT_DELETE
+    filePath: /absolute/path/to/file.ext
+
+Command: STAAL_CONTENT_CHANGE (full file replace/create)
+Description: Replace or create a file. Always include full content.
+Required fields:
+    type: STAAL_CONTENT_CHANGE
+    filePath: /absolute/path/to/file.ext
+    newContent: |-
+    (complete file content here; do not base64)
+
+Command: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+Description: Re-parse current working directory state.
+Required fields:
+    type: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
+
+Command: STAAL_CI_LIGHT_REQUEST
+Description: Run lightweight CI; results appear under .heat.
+Required fields:
+    type: STAAL_CI_LIGHT_REQUEST
+
+Command: STAAL_CI_HEAVY_REQUEST
+Description: Run heavy CI; may take hours; results under .heat.
+Required fields:
+    type: STAAL_CI_HEAVY_REQUEST
+
+Command: STAAL_FINISH_OK
+Description: Finish in success; pipeline proceeds to PR creation.
+Required fields:
+    type: STAAL_FINISH_OK
+    prMessage: |-
+    (markdown summary of changes, including explicit breaking changes if any)
+
+Command: STAAL_FINISH_NOK
+Description: Finish in error; pipeline continues with failure handling.
+Required fields:
+    type: STAAL_FINISH_NOK
+    errMessage: |-
+    (clear explanation why development stopped, plus concrete suggestions)
+
+Command: STAAL_STATUS
+Description: Log progress frequently; STAAL replies with OK or error.
+Required fields:
+    type: STAAL_STATUS
+    statusMsg: |-
+    (short status or progress message)
+
+Command: STAAL_CONTINUE
+Description: Request next chunk when a response ends with "...".
+Required fields:
+    type: STAAL_CONTINUE
