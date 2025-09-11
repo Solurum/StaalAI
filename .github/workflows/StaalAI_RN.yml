@@ -1,0 +1,93 @@
+name: StaalAI_RN
+
+on:
+  issues:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write         # needed to push a branch and commit
+  pull-requests: write    # needed to open a PR
+  issues: read            # read the issue payload
+
+jobs:
+  create-pr-from-issue:
+    runs-on: ubuntu-latest
+    # Only handle comments on issues (not PRs)
+    if: ${{ github.event_name != 'issue_comment' || github.event.issue.pull_request == null }}
+
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up Git user
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Ensure GitHub CLI is available
+        run: gh --version
+
+      - name: Create or checkout issue branch
+        id: branch
+        run: |
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          BRANCH="issue-${ISSUE_NUMBER}"
+
+          # Check if remote branch exists
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "Remote branch $BRANCH exists. Checking out and pulling latest..."
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull --ff-only origin "$BRANCH"
+          else
+            echo "Remote branch $BRANCH does not exist. Creating from master..."
+            git checkout -b "$BRANCH" master
+          fi
+
+          echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Write lastprompt.txt with issue content (plain text)
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          {
+            echo "Title: ${{ github.event.issue.title }}"
+            echo
+            echo "Description:"
+            echo "${{ github.event.issue.body }}"
+            echo
+            echo "Comments:"
+            # Use gh to fetch comments as JSON, then jq to print only the body text lines
+            gh issue view ${{ github.event.issue.number }} \
+              --repo ${{ github.repository }} \
+              --json comments \
+            | jq -r '.comments[]?.body'
+          } > lastprompt.txt
+
+      - name: Commit and push changes
+        run: |
+          git add lastprompt.txt
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update lastprompt.txt for issue #${{ github.event.issue.number }}"
+            git push origin "${{ steps.branch.outputs.branch_name }}"
+          fi
+
+      - name: Create or update Pull Request to master
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          PR_TITLE="Add lastprompt.txt for issue #${{ github.event.issue.number }}"
+          PR_BODY="Auto-generated from [issue #${{ github.event.issue.number }}](${{ github.event.issue.html_url }})."
+
+          # Try to create a PR; if it exists, just update the body
+          if ! gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base master --head "${{ steps.branch.outputs.branch_name }}"; then
+            echo "PR may already exist. Updating body..."
+            gh pr edit --title "$PR_TITLE" --body "$PR_BODY" --base master --head "${{ steps.branch.outputs.branch_name }}"
+          fi
