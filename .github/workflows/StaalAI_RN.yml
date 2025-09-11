@@ -46,23 +46,30 @@ jobs:
           fi
 
           echo "branch_name=$BRANCH" >> "$GITHUB_OUTPUT"
-
+          
       - name: Write lastprompt.txt with issue content (plain text)
         env:
           GH_TOKEN: ${{ secrets.PAT }}
         run: |
+          # Title
+          printf "Title: %s\n\n" "${{ github.event.issue.title }}" > lastprompt.txt
+      
+          # Description
           {
-            echo "Title: ${{ github.event.issue.title }}"
-            echo
             echo "Description:"
-            echo "${{ github.event.issue.body }}"
-            echo
-            echo "Comments:"
-            gh issue view ${{ github.event.issue.number }} \
-              --repo ${{ github.repository }} \
-              --json comments \
-            | jq -r '.comments[]?.body'
-          } > lastprompt.txt
+            # Use heredoc with single quotes to prevent interpolation/escaping issues
+            cat <<'EOF'
+            ${{ github.event.issue.body }}
+            EOF
+                  echo
+                  echo "Comments:"
+                } >> lastprompt.txt
+            
+                # Append comments (one per line)
+                gh issue view "${{ github.event.issue.number }}" \
+                  --repo "${{ github.repository }}" \
+                  --json comments \
+                | jq -r '.comments[]?.body' >> lastprompt.txt
 
       - name: Commit and push changes
         run: |
