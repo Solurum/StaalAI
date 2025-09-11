@@ -4,13 +4,13 @@ YAML EXAMPLES SHOWN BELOW; USE THE SEPARATOR LINE BETWEEN DOCUMENTS
 Do not output any text before the first type: line. The very first non-empty line of each document must be type:.
 
 Command: STAAL_CONTENT_REQUEST
-Description: Request file content for the filePath.
+Description: Request file content for the filePath. IMPORTANT: Only ONE filePath allowed per command.
 Required fields:
     type: STAAL_CONTENT_REQUEST
     filePath: /absolute/path/to/file.ext
 
 Command: STAAL_CONTENT_DELETE
-Description: Delete a file.
+Description: Delete a file. IMPORTANT: Only ONE filePath allowed per command.
 Required fields:
     type: STAAL_CONTENT_DELETE
     filePath: /absolute/path/to/file.ext
