@@ -33,6 +33,11 @@
             string originalCommand = $"[STAAL_CONTENT_REQUEST] {string.Join(", ", paths)}";
             logger.LogDebug(originalCommand);
 
+            if (paths.Count == 0)
+            {
+                throw new InvalidOperationException("ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'.");
+            }
+
             foreach (var path in paths)
             {
                 try

@@ -24,6 +24,9 @@
         int maxConsecutiveErrors = 3;
         int currentConsecutiveErrors = 0;
 
+        int maxConsecutiveValidateErrors = 3;
+        int currentConsecutiveValidateErrors = 0;
+
         int maxResponsesWithoutDocumentEditsStop = 6;
         int maxResponsesWithoutDocumentEditsWarning = 3;
         int currentResponsesWithoutDocumentEdits = 0;
@@ -120,11 +123,15 @@
             }
 
             bool hadDocumentEdits = false;
+            bool hadFailures = false;
             foreach (var command in allCommands)
             {
                 if (!command.IsValid(out var output))
                 {
-                    conversation.AddReplyToBuffer(output, command.GetType().Name);
+                    currentConsecutiveValidateErrors++;
+                    logger.LogWarning($"WARNING! One of the commands was invalid with output: {output}");
+                    conversation.AddReplyToBuffer("Invalid Response due to:" + output, command.GetType().Name);
+                    hadFailures = true;
                 }
 
                 if (command.GetType() == typeof(StaalContentChange))
@@ -156,7 +163,20 @@
                 // all good
             }
 
-            return allCommands;
+            if (currentConsecutiveValidateErrors >= maxConsecutiveValidateErrors)
+            {
+                throw new InvalidOperationException($"ERR - Hard Stop - AI Replied with Invalid Data {currentConsecutiveValidateErrors} times. Last response: {response}");
+            }
+
+            if (hadFailures)
+            {
+                return null;
+            }
+            else
+            {
+                currentConsecutiveValidateErrors = 0;
+                return allCommands;
+            }
         }
     }
 }
