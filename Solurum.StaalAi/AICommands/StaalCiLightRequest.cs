@@ -21,5 +21,11 @@
                 conversation.AddReplyToBuffer($"Could not run CI. Output: {psOutput}", originalCommand);
             }
         }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            return true;
+        }
     }
 }

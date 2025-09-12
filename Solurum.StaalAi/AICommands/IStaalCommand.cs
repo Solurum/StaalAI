@@ -7,6 +7,8 @@
     public interface IStaalCommand
     {
         void Execute(ILogger logger, IConversation conversation, IFileSystem fs, string workingDirPath);
+
+        bool IsValid(out string output);
     }
 
 }

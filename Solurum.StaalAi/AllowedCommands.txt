@@ -21,7 +21,7 @@ Required fields:
     type: STAAL_CONTENT_CHANGE
     filePath: /absolute/path/to/file.ext
     newContent: |-
-    (complete file content here; do not base64)
+        (complete file content here; do not base64)
 
 Command: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
 Description: Re-parse current working directory state.

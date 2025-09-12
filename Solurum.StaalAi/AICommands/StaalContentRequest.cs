@@ -3,6 +3,8 @@
     using System.Collections.Generic;
     using System.Linq;
 
+    using Microsoft.VisualBasic;
+
     using Solurum.StaalAi.AIConversations;
 
     /// <summary>
@@ -27,15 +29,6 @@
         public void Execute(ILogger logger, IConversation conversation, IFileSystem fs, string workingDirPath)
         {
             var paths = CollectPaths();
-
-            if (paths.Count == 0)
-            {
-                const string noPaths =
-                    "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
-                logger.LogError(noPaths);
-                conversation.AddReplyToBuffer(noPaths, "[STAAL_CONTENT_REQUEST] <no paths>");
-                return;
-            }
 
             string originalCommand = $"[STAAL_CONTENT_REQUEST] {string.Join(", ", paths)}";
             logger.LogDebug(originalCommand);
@@ -79,6 +72,26 @@
                     conversation.AddReplyToBuffer(msg, originalCommand);
                 }
             }
+        }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            var paths = CollectPaths();
+
+            if (String.IsNullOrWhiteSpace(FilePath))
+            {
+                output = "Invalid Command! Missing the filePath argument!";
+                return false;
+            }
+
+            if (paths.Count == 0)
+            {
+                output = "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>

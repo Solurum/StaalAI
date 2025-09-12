@@ -28,6 +28,12 @@
 
             conversation.AddReplyToBuffer("NOT IMPLEMENTED YET, PLEASE NO LONGER USE THIS COMMAND", originalCommand); 
         }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            return true;
+        }
     }
 
 }

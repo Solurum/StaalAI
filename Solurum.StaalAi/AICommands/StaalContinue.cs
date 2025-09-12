@@ -18,6 +18,12 @@
                 conversation.AddReplyToBuffer("DONE", originalCommand);
             }
         }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            return true;
+        }
     }
 
 }

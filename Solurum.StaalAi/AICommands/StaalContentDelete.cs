@@ -33,6 +33,18 @@
             }
 
         }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            if (String.IsNullOrWhiteSpace(FilePath))
+            {
+                output = "Invalid Command! Missing the filePath argument!";
+                return false;
+            }
+
+            return true;
+        }
     }
 
 }

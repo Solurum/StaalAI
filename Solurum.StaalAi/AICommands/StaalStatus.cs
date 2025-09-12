@@ -14,6 +14,18 @@
 
             conversation.AddReplyToBuffer("OK", originalCommand);
         }
+
+        public bool IsValid(out string output)
+        {
+            if (String.IsNullOrWhiteSpace(StatusMsg))
+            {
+                output = "Invalid Command! statusMsg was empty.";
+                return false;
+            }
+
+            output = String.Empty;
+            return true;
+        }
     }
 
 }

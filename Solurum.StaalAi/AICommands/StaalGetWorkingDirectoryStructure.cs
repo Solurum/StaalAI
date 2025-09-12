@@ -44,6 +44,12 @@
 
             return sb.ToString();
         }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            return true;
+        }
     }
 
 }
