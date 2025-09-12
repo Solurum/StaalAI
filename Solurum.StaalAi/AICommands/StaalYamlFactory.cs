@@ -83,7 +83,7 @@ public static class StaalYamlCommandParser
                     continue;
                 }
             }
-            catch (YamlException)
+            catch (YamlException ex)
             {
                 var yamlRules =
                     @"YAML Rules (must follow)
@@ -107,7 +107,7 @@ public static class StaalYamlCommandParser
                        - Separate multiple YAML documents with a line containing exactly:
                          " + StaalSeparator.value;
 
-                throw new InvalidOperationException("INVALID YAML - Please check you're sending valid YAML: " + yamlRules);
+                throw new InvalidOperationException($"INVALID YAML with exception {ex} - Please check you're sending valid YAML: " + yamlRules);
             }
         }
 
