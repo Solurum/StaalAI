@@ -8,6 +8,8 @@
     using System.Threading.Tasks;
     using System.Windows.Input;
 
+    using Microsoft.Extensions.Logging;
+
     using Solurum.StaalAi.AICommands;
 
     /// <summary>
@@ -34,10 +36,13 @@
 
         IConversation conversation;
 
-        public AIGuardRails(IFileSystem fs, IConversation conversation)
+        ILogger logger;
+
+        public AIGuardRails(IFileSystem fs, IConversation conversation, ILogger logger)
         {
             this.fs = fs;
             this.conversation = conversation;
+            this.logger = logger;
         }
 
         public IReadOnlyList<AICommands.IStaalCommand> ValidateAndParseResponse(string response)
@@ -49,6 +54,7 @@
             }
             else if (currentTotalResponses >= warningTotalResponses)
             {
+                logger.LogWarning($"WARNING! I have received {currentTotalResponses} responses out of a maximum of {maxTotalResponses}. If you are finished, please reply with STAAL_FINISH_OK or STAAL_FINISH_NOK commands, if not, then please perform more actions within a single response. I will error and force stop when receiving {maxTotalResponses} total responses or more.");
                 conversation.AddReplyToBuffer($"WARNING! I have received {currentTotalResponses} responses out of a maximum of {maxTotalResponses}. If you are finished, please reply with STAAL_FINISH_OK or STAAL_FINISH_NOK commands, if not, then please perform more actions within a single response. I will error and force stop when receiving {maxTotalResponses} total responses or more.", "WARNING");
             }
 
@@ -60,6 +66,7 @@
                 }
                 else
                 {
+                    logger.LogWarning($"WARNING! I have received the same response from you {sameResponseCount} times. If you are finished, please reply with STAAL_FINISH_OK or STAAL_FINISH_NOK commands. I will error and force stop when receiving the same response {maxSameResponseCount} times.");
                     conversation.AddReplyToBuffer($"WARNING! I have received the same response from you {sameResponseCount} times. If you are finished, please reply with STAAL_FINISH_OK or STAAL_FINISH_NOK commands. I will error and force stop when receiving the same response {maxSameResponseCount} times.", "WARNING");
                 }
             }
@@ -100,10 +107,12 @@
             Please use only the following command types:
             " + fs.File.ReadAllText("AllowedCommands.txt");
 
+                    logger.LogWarning($"Had to send {currentConsecutiveErrors} repair messages to AI.");
                     conversation.AddReplyToBuffer(repairParseException, "ERROR");
                 }
                 else
                 {
+                    logger.LogError("AI kept sending invalid YAML. Last Response: " + response);
                     throw;
                 }
 
@@ -139,6 +148,7 @@
             }
             else if (currentResponsesWithoutDocumentEdits >= maxResponsesWithoutDocumentEditsWarning)
             {
+                logger.LogWarning($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes.");
                 conversation.AddReplyToBuffer($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes. Please consider the available commands again: " + fs.File.ReadAllText("AllowedCommands.txt"), "WARNING");
             }
             else

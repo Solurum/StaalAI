@@ -1,5 +1,7 @@
 ﻿namespace Solurum.StaalAi.AICommands
 {
+    using Microsoft.Extensions.Logging;
+
     using Solurum.StaalAi.AIConversations;
 
     public sealed class StaalCiHeavyRequest : IStaalCommand
@@ -26,6 +28,7 @@
             // Wait WE CAN get a trigger to work with a PAT iso github access token.
             // Still technology dependent though. might aswel trigger a workflow run directly with dispatch.
 
+            logger.LogWarning("STAAL_CI_HEAVY_REQUEST: NOT IMPLEMENTED YET, PLEASE NO LONGER USE THIS COMMAND");
             conversation.AddReplyToBuffer("NOT IMPLEMENTED YET, PLEASE NO LONGER USE THIS COMMAND", originalCommand); 
         }
 

@@ -39,7 +39,7 @@
                 {
                     if (!fs.File.Exists(path))
                     {
-                        string msg = $"ERR: requested file does not exist, filepath: '{path}'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                        string msg = $"ERR: requested file does not exist, filepath: '{path}'. Check the file is an absolute path returned from STAAL_GET_WORKING_DIRECTORY_STRUCTURE.";
                         logger.LogError(msg);
                         conversation.AddReplyToBuffer(msg, originalCommand);
                         continue;
@@ -52,7 +52,7 @@
                     if (!withinWorkingDir)
                     {
                         string msg =
-                            $"ERR: requested file does not start with {workingDirPath} so is blocked. Only files in the designated working directory can be used. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                            $"ERR: requested file does not start with {workingDirPath} so is blocked. Only files in the designated working directory can be used.  Check the file is an absolute path returned from STAAL_GET_WORKING_DIRECTORY_STRUCTURE.";
                         logger.LogError(msg);
                         conversation.AddReplyToBuffer(msg, originalCommand);
                         continue;
@@ -87,7 +87,7 @@
 
             if (paths.Count == 0)
             {
-                output = "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                output = "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'.";
                 return false;
             }
 

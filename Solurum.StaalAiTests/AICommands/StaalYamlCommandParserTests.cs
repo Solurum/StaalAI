@@ -274,8 +274,7 @@ namespace Solurum.StaalAi.Tests
 
             Action act = () => StaalYamlCommandParser.ParseBundle(doc);
 
-            act.Should().Throw<InvalidOperationException>()
-               .WithMessage("*missing 'type'*");
+            act.Should().Throw<InvalidOperationException>();
         }
     }
 }

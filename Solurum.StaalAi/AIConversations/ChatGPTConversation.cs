@@ -68,7 +68,7 @@
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.fs = fs ?? throw new ArgumentNullException(nameof(fs));
             this.workingDirPath = workingDirPath ?? throw new ArgumentNullException(nameof(workingDirPath));
-            chatGptGuardRails = new AIGuardRails(fs, this);
+            chatGptGuardRails = new AIGuardRails(fs, this, logger);
         }
 
         // Adds user content directly to history (chunking >60k, appending "..." on all but last chunk)
@@ -140,7 +140,7 @@
             }
 
             var assistantText = ExtractAssistantTopText(completion);
-            logger.LogDebug($"Raw Response: {assistantText}");
+            //logger.LogDebug($"Raw Response: {assistantText}");
 
             bytesOut += Encoding.UTF8.GetByteCount(assistantText);
 
@@ -332,15 +332,18 @@
         {
             var allCommands = chatGptGuardRails.ValidateAndParseResponse(response);
 
-            foreach (var cmd in allCommands)
+            if (allCommands != null)
             {
-                if (!running)
+                foreach (var cmd in allCommands)
                 {
-                    // Conversation was stopped by a command; stop processing further commands.
-                    break;
-                }
+                    if (!running)
+                    {
+                        // Conversation was stopped by a command; stop processing further commands.
+                        break;
+                    }
 
-                cmd.Execute(logger, this, fs, workingDirPath);
+                    cmd.Execute(logger, this, fs, workingDirPath);
+                }
             }
 
             if (!SendNextBuffer() && running)

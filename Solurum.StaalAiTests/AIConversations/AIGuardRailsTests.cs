@@ -1,5 +1,7 @@
 ﻿using FluentAssertions;
 
+using Microsoft.Extensions.Logging;
+
 using Moq;
 
 using Skyline.DataMiner.CICD.FileSystem;
@@ -28,7 +30,8 @@ namespace Solurum.StaalAi.Tests.Conversations
             var fs = new Mock<IFileSystem>(MockBehavior.Strict);
             fs.SetupGet(x => x.File).Returns(file.Object);
 
-            var sut = new AIGuardRails(fs.Object, convo.Object);
+            Mock<ILogger> loggerMock = new Mock<ILogger>();
+            var sut = new AIGuardRails(fs.Object, convo.Object, loggerMock.Object);
             return (sut, convo, fs, file);
         }
 
