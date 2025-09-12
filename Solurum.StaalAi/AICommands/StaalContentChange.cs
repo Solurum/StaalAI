@@ -1,5 +1,7 @@
 ﻿namespace Solurum.StaalAi.AICommands
 {
+    using Microsoft.VisualBasic;
+
     using Solurum.StaalAi.AIConversations;
 
     public sealed class StaalContentChange : IStaalCommand
@@ -44,6 +46,24 @@
                 logger.LogError(errorMessage);
                 conversation.AddReplyToBuffer(errorMessage, originalCommand);
             }
+        }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            if (String.IsNullOrWhiteSpace(FilePath))
+            {
+                output = "Invalid Command! Missing the filePath argument!";
+                return false;
+            }
+
+            if (String.IsNullOrWhiteSpace(NewContent))
+            {
+                output = "Invalid Command! Missing the newContent argument!. If intending to remove a file, use the content delete command instead.)";
+                return false;
+            }
+       
+            return true;
         }
     }
 

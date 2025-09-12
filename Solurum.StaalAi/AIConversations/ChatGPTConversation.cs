@@ -18,6 +18,7 @@
 
     using Solurum.StaalAi.AICommands;
     using Solurum.StaalAi.Commands;
+    using Solurum.StaalAi.Shell;
 
     public class ChatGPTConversation : IConversation
     {
@@ -59,10 +60,7 @@
 
         // Limit amount of errors. Before stopping.
 
-        int maxConsecutiveErrors = 3;
-        int currentConsecutiveErrors = 0;
-
-
+        AIGuardRails chatGptGuardRails;
         public ChatGPTConversation(ILogger logger, IFileSystem fs, string workingDirPath, string openApiToken, string openApiModel)
         {
             this.DefaultModel = openApiModel ?? throw new ArgumentNullException(nameof(openApiModel));
@@ -70,6 +68,7 @@
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.fs = fs ?? throw new ArgumentNullException(nameof(fs));
             this.workingDirPath = workingDirPath ?? throw new ArgumentNullException(nameof(workingDirPath));
+            chatGptGuardRails = new AIGuardRails(fs, this, logger);
         }
 
         // Adds user content directly to history (chunking >60k, appending "..." on all but last chunk)
@@ -141,7 +140,7 @@
             }
 
             var assistantText = ExtractAssistantTopText(completion);
-            logger.LogDebug($"Raw Response: {assistantText}");
+            //logger.LogDebug($"Raw Response: {assistantText}");
 
             bytesOut += Encoding.UTF8.GetByteCount(assistantText);
 
@@ -173,9 +172,10 @@
             return true;
         }
 
-        public void Start(string initialPrompt)
+        public bool Start(string initialPrompt)
         {
-            if (running) return;
+            bool stoppedWithFailure = false;
+            if (running) return true;
 
             var options = new OpenAIClientOptions
             {
@@ -253,6 +253,7 @@
                         }
                         catch (InvalidOperationException)
                         {
+                            stoppedWithFailure = true;
                             break; // Completed
                         }
 
@@ -264,6 +265,7 @@
                             }
                             catch (Exception ex)
                             {
+                                stoppedWithFailure = true;
                                 logger.LogError(ex, "Critical Error while handling ChatGPT response. Stopping.");
                                 running = false;
                             }
@@ -273,6 +275,7 @@
                 catch (ThreadAbortException) { /* shutting down */ }
                 catch (Exception ex)
                 {
+                    stoppedWithFailure = true;
                     logger.LogError(ex, "Response thread crashed.");
                 }
             })
@@ -280,9 +283,12 @@
                 IsBackground = true,
                 Name = "ChatGPTConversationResponseThread"
             };
+
             responseThread.Start();
             logger.LogDebug("Started Response Thread, main thread blocked until finished.");
             responseThread.Join();
+
+            return stoppedWithFailure;
         }
 
         public void Stop()
@@ -324,10 +330,10 @@
 
         private void HandleResponses(string response)
         {
-            try
-            {
-                var allCommands = StaalYamlCommandParser.ParseBundle(response);
+            var allCommands = chatGptGuardRails.ValidateAndParseResponse(response);
 
+            if (allCommands != null)
+            {
                 foreach (var cmd in allCommands)
                 {
                     if (!running)
@@ -338,46 +344,12 @@
 
                     cmd.Execute(logger, this, fs, workingDirPath);
                 }
-
-                currentConsecutiveErrors = 0;
             }
-            catch (Exception ex)
+
+            if (!SendNextBuffer() && running)
             {
-
-                logger.LogError(ex, "Could not parse ChatGPT Response. Requesting YAML-only resend.");
-
-                var repair =
-        $@"Could not parse your response due to exception {ex}. Please resend your previous message as YAML-only commands.
-Rules:
-- Plain text is not allowed. If you need to report progress, send a STAAL_STATUS with statusMsg: |-.
-- Each YAML doc must start with: type: STAAL_...
-- Separate docs with exactly:
-" + StaalSeparator.value + $@"
-- No code fences. No prose. Indentation 2 spaces. LF newlines only.
-
-If your previous message was progress text, convert it to:
-type: STAAL_STATUS
-statusMsg: |- 
-  (your lines here)
-
-Please use only the following command types.
-";
-
-                repair += fs.File.ReadAllText("AllowedCommands.txt");
-                currentConsecutiveErrors++;
-                if (currentConsecutiveErrors < maxConsecutiveErrors)
-                {
-                    // Send the repair instruction into the conversation
-                    AddReplyToBuffer(repair, "FORMAT_REPAIR");
-                    SendNextBuffer();
-                }
-                else
-                {
-                    throw;
-                }
+                throw new InvalidOperationException("Response Buffer was Empty, could not reply to the AI but expected to.");
             }
-
-            SendNextBuffer();
         }
 
         // ------------------------

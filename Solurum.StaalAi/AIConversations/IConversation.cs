@@ -22,7 +22,7 @@
         /// <summary>
         /// Start the AI Conversation.
         /// </summary>
-        void Start(string initialPrompt);
+        bool Start(string initialPrompt);
 
         /// <summary>
         /// Stop the AI Conversation.

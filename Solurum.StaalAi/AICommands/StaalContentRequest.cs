@@ -3,6 +3,8 @@
     using System.Collections.Generic;
     using System.Linq;
 
+    using Microsoft.VisualBasic;
+
     using Solurum.StaalAi.AIConversations;
 
     /// <summary>
@@ -28,15 +30,6 @@
         {
             var paths = CollectPaths();
 
-            if (paths.Count == 0)
-            {
-                const string noPaths =
-                    "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
-                logger.LogError(noPaths);
-                conversation.AddReplyToBuffer(noPaths, "[STAAL_CONTENT_REQUEST] <no paths>");
-                return;
-            }
-
             string originalCommand = $"[STAAL_CONTENT_REQUEST] {string.Join(", ", paths)}";
             logger.LogDebug(originalCommand);
 
@@ -46,7 +39,7 @@
                 {
                     if (!fs.File.Exists(path))
                     {
-                        string msg = $"ERR: requested file does not exist, filepath: '{path}'. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                        string msg = $"ERR: requested file does not exist, filepath: '{path}'. Check the file is an absolute path returned from STAAL_GET_WORKING_DIRECTORY_STRUCTURE.";
                         logger.LogError(msg);
                         conversation.AddReplyToBuffer(msg, originalCommand);
                         continue;
@@ -59,7 +52,7 @@
                     if (!withinWorkingDir)
                     {
                         string msg =
-                            $"ERR: requested file does not start with {workingDirPath} so is blocked. Only files in the designated working directory can be used. If this continues to happen please respond with STAAL_FINISH_NOK command.";
+                            $"ERR: requested file does not start with {workingDirPath} so is blocked. Only files in the designated working directory can be used.  Check the file is an absolute path returned from STAAL_GET_WORKING_DIRECTORY_STRUCTURE.";
                         logger.LogError(msg);
                         conversation.AddReplyToBuffer(msg, originalCommand);
                         continue;
@@ -79,6 +72,26 @@
                     conversation.AddReplyToBuffer(msg, originalCommand);
                 }
             }
+        }
+
+        public bool IsValid(out string output)
+        {
+            output = String.Empty;
+            var paths = CollectPaths();
+
+            if (String.IsNullOrWhiteSpace(FilePath))
+            {
+                output = "Invalid Command! Missing the filePath argument!";
+                return false;
+            }
+
+            if (paths.Count == 0)
+            {
+                output = "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'.";
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>

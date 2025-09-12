@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
 
+using Solurum.StaalAi;
 using Solurum.StaalAi.AICommands;
 
 using YamlDotNet.Core;
@@ -54,7 +55,6 @@ public static class StaalYamlCommandParser
                    .ToList();
 
         var result = new List<IStaalCommand>(docs.Count);
-        bool singleDoc = docs.Count == 1;
 
         foreach (var raw in docs)
         {
@@ -83,15 +83,32 @@ public static class StaalYamlCommandParser
                     continue;
                 }
             }
-            catch (YamlException)
+            catch (YamlException ex)
             {
-                // ignore, try next rule
-            }
+                var yamlRules =
+                    @"YAML Rules (must follow)
 
-            // If we reach here, this chunk could not be parsed into a command.
-            if (singleDoc)
-                throw new InvalidOperationException("YAML command missing 'type'.");
-            // Otherwise, skip bad doc and continue (robustness for multi-doc bundles).
+                    1. Key–Value format
+                       - Always write as `key: value` (with one space after the colon).
+                       - Example:
+                         type: STAAL_STATUS
+
+                    2. Block scalars (`|`, `|-`, `|+`)
+                       - After `|`/`|-`/`|+`, indent all content lines at least 2 spaces.
+                       - Example:
+                         statusMsg: |-
+                           First line
+                           Second line
+
+                    3. Multi-line values
+                       - Never put plain text directly under a key if it spans multiple lines; always use a block scalar (`|` or `|-`).
+
+                    4. Document separators
+                       - Separate multiple YAML documents with a line containing exactly:
+                         " + StaalSeparator.value;
+
+                throw new InvalidOperationException($"INVALID YAML with exception {ex} - Please check you're sending valid YAML: " + yamlRules);
+            }
         }
 
         return result;
@@ -116,8 +133,6 @@ public static class StaalYamlCommandParser
             // Not a mapping doc; caller will try sequence fallback
             return false;
         }
-        // IMPORTANT: do NOT catch InvalidOperationException here.
-        // Let it bubble to satisfy tests that expect a throw when a single mapping lacks 'type'.
     }
 
     private static IStaalCommand ParseMappingDocByType(string yaml)
