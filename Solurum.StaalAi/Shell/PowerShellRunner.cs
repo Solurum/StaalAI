@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.Shell
+namespace Solurum.StaalAi.Shell
 {
     using System;
     using System.Collections.Generic;
@@ -10,6 +10,10 @@
 
     using Skyline.DataMiner.Sdk.Shell;
 
+    /// <summary>
+    /// Provides helpers to run PowerShell-based CI scripts from the tool.
+    /// Falls back to invoking the OS shell when the embedded PowerShell API is unavailable.
+    /// </summary>
     public static class PowerShellRunner
     {
         static string FindExecutable(string exeName)
@@ -19,6 +23,16 @@
             return paths.Select(path => FileSystem.Instance.Path.Combine(path, exeName)).FirstOrDefault(FileSystem.Instance.File.Exists);
         }
 
+        /// <summary>
+        /// Executes the lightweight CI PowerShell script (.heat/light_ci.ps1) within the specified working directory.
+        /// Uses the PowerShell API when available, and falls back to the platform shell if necessary.
+        /// </summary>
+        /// <param name="logger">The logger used to report progress and errors.</param>
+        /// <param name="fs">The file system abstraction used to resolve paths and check file existence.</param>
+        /// <param name="workingDirPath">The absolute working directory in which to run the CI script.</param>
+        /// <param name="psOutput">When the method returns, contains combined output and diagnostics from the run.</param>
+        /// <returns>True if the script completed without errors; otherwise false.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when <paramref name="workingDirPath"/> is null.</exception>
         public static bool RunLightCI(ILogger logger, IFileSystem fs, string workingDirPath, out string psOutput)
         {
             if (workingDirPath == null)

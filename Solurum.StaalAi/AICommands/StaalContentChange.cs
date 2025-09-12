@@ -1,15 +1,36 @@
-﻿namespace Solurum.StaalAi.AICommands
+namespace Solurum.StaalAi.AICommands
 {
     using Microsoft.VisualBasic;
 
     using Solurum.StaalAi.AIConversations;
 
+    /// <summary>
+    /// Creates or updates a file with the provided content, restricted to the current working directory.
+    /// </summary>
     public sealed class StaalContentChange : IStaalCommand
     {
+        /// <summary>
+        /// The command type discriminator used by the YAML parser.
+        /// </summary>
         public string Type { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Absolute file path to create or update.
+        /// </summary>
         public string FilePath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The new content to write to the file.
+        /// </summary>
         public string NewContent { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Executes the file content change operation. Ensures the target is within the working directory.
+        /// </summary>
+        /// <param name="logger">The logger to write diagnostics to.</param>
+        /// <param name="conversation">The active conversation to write the response into.</param>
+        /// <param name="fs">The file system abstraction for file and directory operations.</param>
+        /// <param name="workingDirPath">The absolute working directory path used as a boundary for allowed changes.</param>
         public void Execute(ILogger logger, IConversation conversation, IFileSystem fs, string workingDirPath)
         {
             string originalCommand = $"[STAAL_CONTENT_CHANGE] {FilePath}";
@@ -48,6 +69,11 @@
             }
         }
 
+        /// <summary>
+        /// Validates that required arguments are present.
+        /// </summary>
+        /// <param name="output">When invalid, contains the reason of failure; otherwise empty.</param>
+        /// <returns>True when <see cref="FilePath"/> and <see cref="NewContent"/> are provided; otherwise false.</returns>
         public bool IsValid(out string output)
         {
             output = String.Empty;

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.RegularExpressions;
 
 using Solurum.StaalAi;
@@ -8,9 +8,17 @@ using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+/// <summary>
+/// Parses YAML documents into Staal AI command instances. Supports multiple documents in a single bundle,
+/// fenced YAML blocks, and a strict separator string.
+/// </summary>
 public static class StaalYamlCommandParser
 {
-    public const string Separator = "=====<<STAAL//YAML//SEPARATOR//2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C>>=====";
+    /// <summary>
+    /// The strict document separator used when splitting multi-document YAML responses.
+    /// </summary>
+    public const string Separator =
+        "=====<<" + "STAAL//YAML//SEPARATOR//" + "2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C" + ">>" + "=====";
 
     private static readonly IDeserializer Yaml =
         new DeserializerBuilder()
@@ -23,6 +31,14 @@ public static class StaalYamlCommandParser
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .Build();
 
+    /// <summary>
+    /// Parses a YAML bundle into a list of concrete <see cref="IStaalCommand"/> instances.
+    /// The bundle may contain multiple documents separated by <see cref="Separator"/>,
+    /// or be expressed as fenced YAML blocks. Both single mapping documents and sequences of maps are supported.
+    /// </summary>
+    /// <param name="bundle">The raw YAML (and optional surrounding text) received from the AI.</param>
+    /// <returns>A read-only list of parsed <see cref="IStaalCommand"/> instances. Empty if no commands are found.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when a YAML parsing error occurs or a command type is unknown.</exception>
     public static IReadOnlyList<IStaalCommand> ParseBundle(string bundle)
     {
         if (string.IsNullOrWhiteSpace(bundle)) return Array.Empty<IStaalCommand>();
@@ -114,51 +130,6 @@ public static class StaalYamlCommandParser
         return result;
     }
 
-    private static bool TryParseMappingDoc(string raw, out List<IStaalCommand> cmds)
-    {
-        cmds = new();
-        try
-        {
-            var peek = Yaml.Deserialize<Dictionary<string, object>>(raw);
-            if (peek == null || !peek.ContainsKey("type"))
-                return false; // NOT a proper single mapping command; let caller try sequence fallback
-
-            // This will throw InvalidOperationException if 'type' is missing/empty
-            var cmd = ParseMappingDocByType(raw);
-            cmds.Add(cmd);
-            return true;
-        }
-        catch (YamlException)
-        {
-            // Not a mapping doc; caller will try sequence fallback
-            return false;
-        }
-    }
-
-    private static IStaalCommand ParseMappingDocByType(string yaml)
-    {
-        var peek = Yaml.Deserialize<Dictionary<string, object>>(yaml);
-        if (!peek.TryGetValue("type", out var tObj) || tObj is null)
-            throw new InvalidOperationException("YAML command missing 'type'.");
-
-        var type = tObj.ToString() ?? string.Empty;
-
-        return type switch
-        {
-            "STAAL_CONTENT_REQUEST" => Yaml.Deserialize<StaalContentRequest>(yaml),
-            "STAAL_CONTENT_DELETE" => Yaml.Deserialize<StaalContentDelete>(yaml),
-            "STAAL_CONTENT_CHANGE" => Yaml.Deserialize<StaalContentChange>(yaml),
-            "STAAL_GET_WORKING_DIRECTORY_STRUCTURE" => Yaml.Deserialize<StaalGetWorkingDirectoryStructure>(yaml),
-            "STAAL_CI_LIGHT_REQUEST" => Yaml.Deserialize<StaalCiLightRequest>(yaml),
-            "STAAL_CI_HEAVY_REQUEST" => Yaml.Deserialize<StaalCiHeavyRequest>(yaml),
-            "STAAL_FINISH_OK" => Yaml.Deserialize<StaalFinishOk>(yaml),
-            "STAAL_FINISH_NOK" => Yaml.Deserialize<StaalFinishNok>(yaml),
-            "STAAL_STATUS" => Yaml.Deserialize<StaalStatus>(yaml),
-            "STAAL_CONTINUE" => Yaml.Deserialize<StaalContinue>(yaml),
-            _ => throw new NotSupportedException($"Unknown command type '{type}'.")
-        };
-    }
-
     // --- helpers ---
 
     /// <summary>
@@ -244,5 +215,50 @@ public static class StaalYamlCommandParser
 
         // If we never found a key line, return original so single-doc logic can throw
         return started ? sb.ToString() : s;
+    }
+
+    private static bool TryParseMappingDoc(string raw, out List<IStaalCommand> cmds)
+    {
+        cmds = new();
+        try
+        {
+            var peek = Yaml.Deserialize<Dictionary<string, object>>(raw);
+            if (peek == null || !peek.ContainsKey("type"))
+                return false; // NOT a proper single mapping command; let caller try sequence fallback
+
+            // This will throw InvalidOperationException if 'type' is missing/empty
+            var cmd = ParseMappingDocByType(raw);
+            cmds.Add(cmd);
+            return true;
+        }
+        catch (YamlException)
+        {
+            // Not a mapping doc; caller will try sequence fallback
+            return false;
+        }
+    }
+
+    private static IStaalCommand ParseMappingDocByType(string yaml)
+    {
+        var peek = Yaml.Deserialize<Dictionary<string, object>>(yaml);
+        if (!peek.TryGetValue("type", out var tObj) || tObj is null)
+            throw new InvalidOperationException("YAML command missing 'type'.");
+
+        var type = tObj.ToString() ?? string.Empty;
+
+        return type switch
+        {
+            "STAAL_CONTENT_REQUEST" => Yaml.Deserialize<StaalContentRequest>(yaml),
+            "STAAL_CONTENT_DELETE" => Yaml.Deserialize<StaalContentDelete>(yaml),
+            "STAAL_CONTENT_CHANGE" => Yaml.Deserialize<StaalContentChange>(yaml),
+            "STAAL_GET_WORKING_DIRECTORY_STRUCTURE" => Yaml.Deserialize<StaalGetWorkingDirectoryStructure>(yaml),
+            "STAAL_CI_LIGHT_REQUEST" => Yaml.Deserialize<StaalCiLightRequest>(yaml),
+            "STAAL_CI_HEAVY_REQUEST" => Yaml.Deserialize<StaalCiHeavyRequest>(yaml),
+            "STAAL_FINISH_OK" => Yaml.Deserialize<StaalFinishOk>(yaml),
+            "STAAL_FINISH_NOK" => Yaml.Deserialize<StaalFinishNok>(yaml),
+            "STAAL_STATUS" => Yaml.Deserialize<StaalStatus>(yaml),
+            "STAAL_CONTINUE" => Yaml.Deserialize<StaalContinue>(yaml),
+            _ => throw new NotSupportedException($"Unknown command type '{type}'.")
+        };
     }
 }
