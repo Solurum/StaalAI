@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.AIConversations
+namespace Solurum.StaalAi.AIConversations
 {
     using System;
     using System.ClientModel;
@@ -20,6 +20,10 @@
     using Solurum.StaalAi.Commands;
     using Solurum.StaalAi.Shell;
 
+    /// <summary>
+    /// Implements an OpenAI-based conversation loop with buffering, chunking, background response handling,
+    /// and history pruning to respect token budgets.
+    /// </summary>
     public class ChatGPTConversation : IConversation
     {
         private const int ChunkSize = 60000;
@@ -61,6 +65,15 @@
         // Limit amount of errors. Before stopping.
 
         AIGuardRails chatGptGuardRails;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ChatGPTConversation"/> class.
+        /// </summary>
+        /// <param name="logger">The logger used for diagnostics and metrics.</param>
+        /// <param name="fs">File system abstraction passed to executed commands.</param>
+        /// <param name="workingDirPath">Absolute path used as the working directory for file operations by commands.</param>
+        /// <param name="openApiToken">API token used to authenticate with the OpenAI service.</param>
+        /// <param name="openApiModel">The model identifier to use for chat completion requests.</param>
         public ChatGPTConversation(ILogger logger, IFileSystem fs, string workingDirPath, string openApiToken, string openApiModel)
         {
             this.DefaultModel = openApiModel ?? throw new ArgumentNullException(nameof(openApiModel));
@@ -71,7 +84,12 @@
             chatGptGuardRails = new AIGuardRails(fs, this, logger);
         }
 
-        // Adds user content directly to history (chunking >60k, appending "..." on all but last chunk)
+        /// <summary>
+        /// Adds user content to the buffer. Oversized messages are split into 60k-character chunks.
+        /// Each chunk except the last will end with an ellipsis to indicate continuation.
+        /// </summary>
+        /// <param name="message">The message content to add.</param>
+        /// <param name="originalCommand">A short prefix that identifies the originating command or context.</param>
         public void AddReplyToBuffer(string message, string originalCommand)
         {
             logger.LogDebug("Adding Message to Buffer...");
@@ -105,13 +123,21 @@
             }
         }
 
+        /// <summary>
+        /// Indicates whether there is unsent content in the buffer.
+        /// </summary>
+        /// <returns>True when there are unsent messages; otherwise false.</returns>
         public bool HasNextBuffer()
         {
             if (history.Count <= lastSentMessageIndex) return false; // nothing new since last send
             return true;
         }
 
-        // Sends the whole history (pruned) and enqueues the assistant text to the background thread
+        /// <summary>
+        /// Sends the buffered conversation (after pruning) and queues the assistant's response for background processing.
+        /// </summary>
+        /// <returns>True if content was sent; otherwise false when there was nothing to send.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the conversation was not started.</exception>
         public bool SendNextBuffer()
         {
             if (!running) throw new InvalidOperationException("Conversation not started. Call Start() first.");
@@ -127,7 +153,7 @@
             {
                 completionRsp = chat.CompleteChat(history);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 logger.LogWarning("OpenAPI Server Timed Out. Possibly waiting too long on response or network issues.");
                 MakeNewChat();
@@ -184,6 +210,12 @@
             return true;
         }
 
+        /// <summary>
+        /// Starts the conversation by sending the initial system prompt and queueing the first AI reply for processing.
+        /// </summary>
+        /// <param name="initialPrompt">The system prompt that initializes the conversation context.</param>
+        /// <returns>True if the conversation ended with a failure during background processing; otherwise false.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the initial prompt is missing.</exception>
         public bool Start(string initialPrompt)
         {
             bool stoppedWithFailure = false;
@@ -307,6 +339,9 @@
             chat = new ChatClient(model: DefaultModel, credential: new ApiKeyCredential(openApiToken), options: options);
         }
 
+        /// <summary>
+        /// Stops the conversation, waits briefly for the response thread, and logs usage metrics.
+        /// </summary>
         public void Stop()
         {
             if (!running) return;
@@ -342,30 +377,6 @@
 
             history.Clear();
             lastSentMessageIndex = 0;
-        }
-
-        private void HandleResponses(string response)
-        {
-            var allCommands = chatGptGuardRails.ValidateAndParseResponse(response);
-
-            if (allCommands != null)
-            {
-                foreach (var cmd in allCommands)
-                {
-                    if (!running)
-                    {
-                        // Conversation was stopped by a command; stop processing further commands.
-                        break;
-                    }
-
-                    cmd.Execute(logger, this, fs, workingDirPath);
-                }
-            }
-
-            if (!SendNextBuffer() && running)
-            {
-                throw new InvalidOperationException("Response Buffer was Empty, could not reply to the AI but expected to.");
-            }
         }
 
         // ------------------------
@@ -447,6 +458,30 @@
                 return sb.ToString();
             }
             return string.Empty;
+        }
+
+        private void HandleResponses(string response)
+        {
+            var allCommands = chatGptGuardRails.ValidateAndParseResponse(response);
+
+            if (allCommands != null)
+            {
+                foreach (var cmd in allCommands)
+                {
+                    if (!running)
+                    {
+                        // Conversation was stopped by a command; stop processing further commands.
+                        break;
+                    }
+
+                    cmd.Execute(logger, this, fs, workingDirPath);
+                }
+            }
+
+            if (!SendNextBuffer() && running)
+            {
+                throw new InvalidOperationException("Response Buffer was Empty, could not reply to the AI but expected to.");
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.AIConversations
+namespace Solurum.StaalAi.AIConversations
 {
     using System;
     using System.Collections.Generic;
@@ -13,7 +13,7 @@
     using Solurum.StaalAi.AICommands;
 
     /// <summary>
-    /// Intended to guard and repair AI Response issues.
+    /// Guards and, when possible, repairs AI response issues by enforcing limits and providing corrective feedback.
     /// </summary>
     public class AIGuardRails
     {
@@ -41,6 +41,12 @@
 
         ILogger logger;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AIGuardRails"/> class.
+        /// </summary>
+        /// <param name="fs">The file system abstraction for reading allowed commands and related content.</param>
+        /// <param name="conversation">The conversation used to send warnings or repair messages back to the AI.</param>
+        /// <param name="logger">The logger for diagnostics and warnings.</param>
         public AIGuardRails(IFileSystem fs, IConversation conversation, ILogger logger)
         {
             this.fs = fs;
@@ -48,6 +54,15 @@
             this.logger = logger;
         }
 
+        /// <summary>
+        /// Validates the raw AI response and attempts to parse it into executable commands.
+        /// Applies guardrails such as duplication detection, maximum response limits, and YAML repair feedback.
+        /// </summary>
+        /// <param name="response">The raw response text returned by the AI model.</param>
+        /// <returns>
+        /// A list of parsed commands; or null when the response was invalid but repair feedback was issued to the AI.
+        /// Throws when critical guard-rail limits are exceeded.
+        /// </returns>
         public IReadOnlyList<AICommands.IStaalCommand> ValidateAndParseResponse(string response)
         {
             currentTotalResponses++;

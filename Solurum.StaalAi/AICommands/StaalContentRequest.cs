@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.AICommands
+namespace Solurum.StaalAi.AICommands
 {
     using System.Collections.Generic;
     using System.Linq;
@@ -8,6 +8,7 @@
     using Solurum.StaalAi.AIConversations;
 
     /// <summary>
+    /// Requests file content for one or more files within the working directory.
     /// Supports:
     /// 1) { "type":"STAAL_CONTENT_REQUEST", "filePath":"path" }
     /// 2) { "type":"STAAL_CONTENT_REQUEST", "filePaths":["path1","path2"] }
@@ -15,6 +16,9 @@
     /// </summary>
     public sealed class StaalContentRequest : IStaalCommand
     {
+        /// <summary>
+        /// The command type discriminator used by the YAML parser.
+        /// </summary>
         public string Type { get; set; } = string.Empty;
 
         /// <summary>Single path (intended).</summary>
@@ -26,6 +30,13 @@
         /// <summary>Multiple paths as objects: files: [{ filePath: "..." }].</summary>
         public List<StaalContentFileRef>? Files { get; set; }
 
+        /// <summary>
+        /// Executes the content request by reading each requested file and adding its content to the conversation buffer.
+        /// </summary>
+        /// <param name="logger">The logger to write diagnostics to.</param>
+        /// <param name="conversation">The active conversation to write the response into.</param>
+        /// <param name="fs">The file system abstraction used to access files.</param>
+        /// <param name="workingDirPath">The absolute working directory path used as a boundary for allowed reads.</param>
         public void Execute(ILogger logger, IConversation conversation, IFileSystem fs, string workingDirPath)
         {
             var paths = CollectPaths();
@@ -79,6 +90,11 @@
             }
         }
 
+        /// <summary>
+        /// Validates that at least one path was provided in one of the supported shapes.
+        /// </summary>
+        /// <param name="output">When invalid, contains the reason of failure; otherwise empty.</param>
+        /// <returns>True when a file path is provided; otherwise false.</returns>
         public bool IsValid(out string output)
         {
             output = String.Empty;
@@ -137,6 +153,9 @@
     /// </summary>
     public sealed class StaalContentFileRef
     {
+        /// <summary>
+        /// The file path to request content for.
+        /// </summary>
         public string FilePath { get; set; } = string.Empty;
     }
 }
