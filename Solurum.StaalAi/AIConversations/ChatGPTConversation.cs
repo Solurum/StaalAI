@@ -122,9 +122,21 @@
 
             logger.LogDebug("Sending new chat history, waiting on response...");
             ChatCompletionOptions opt = new ChatCompletionOptions();
-            var completionRsp = chat.CompleteChat(history);
-            var completion = completionRsp.Value;
+            ClientResult<ChatCompletion> completionRsp;
+            try
+            {
+                completionRsp = chat.CompleteChat(history);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("OpenAPI Server Timed Out. Possibly waiting too long on response or network issues.");
+                MakeNewChat();
+                AddReplyToBuffer("WARNING! Our previous conversation failed with an exception. I suggest handling the files one by one so responses are quicker.", "WARNING");
 
+                completionRsp = chat.CompleteChat(history);
+            }
+
+            var completion = completionRsp.Value;
             logger.LogDebug("Received AI Response..");
 
             apiCalls++;
@@ -177,17 +189,7 @@
             bool stoppedWithFailure = false;
             if (running) return true;
 
-            var options = new OpenAIClientOptions
-            {
-                // How long to wait for any single network operation
-                NetworkTimeout = TimeSpan.FromMinutes(30),
-
-                // (Optional) Tweak retries; fewer retries can help fail fast instead of waiting 4x
-                RetryPolicy = new ClientRetryPolicy(maxRetries: 2)
-            };
-
-
-            chat = new ChatClient(model: DefaultModel, credential: new ApiKeyCredential(openApiToken), options: options);
+            MakeNewChat();
 
             startedAt = DateTimeOffset.UtcNow;
             history.Clear();
@@ -289,6 +291,20 @@
             responseThread.Join();
 
             return stoppedWithFailure;
+        }
+
+        private void MakeNewChat()
+        {
+            var options = new OpenAIClientOptions
+            {
+                // How long to wait for any single network operation
+                NetworkTimeout = TimeSpan.FromMinutes(10),
+
+                // (Optional) Tweak retries; fewer retries can help fail fast instead of waiting 4x
+                RetryPolicy = new ClientRetryPolicy(maxRetries: 2)
+            };
+           
+            chat = new ChatClient(model: DefaultModel, credential: new ApiKeyCredential(openApiToken), options: options);
         }
 
         public void Stop()

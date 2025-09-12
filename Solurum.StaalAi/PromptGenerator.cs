@@ -100,8 +100,9 @@
 
             prompt.AppendLine("Always include at least one STAAL command in your responses to avoid stalling. Never include a STAAL command unless you intend STAAL to execute it.");
             prompt.AppendLine("Start with a STAAL_STATUS command saying you're ready and a brief (max 10 lines) summary of what you'll do.");
-            prompt.AppendLine("Then perform STAAL_CONTENT_REQUEST calls using files from the working directory. If you're unsure about the working directory, send STAAL_GET_WORKING_DIRECTORY_STRUCTURE.");
+            prompt.AppendLine("Then perform STAAL_CONTENT_REQUEST calls using files from the working directory, begin with iron.staal.txt files you find and follow their rules. If you're unsure about the working directory, send STAAL_GET_WORKING_DIRECTORY_STRUCTURE.");
             prompt.AppendLine("After code changes with STAAL_CONTENT_CHANGE calls, run STAAL_CI_LIGHT_REQUEST and check the output for failures.");
+            prompt.AppendLine("To avoid too large responses, try to handle files one by one.");
             prompt.AppendLine("Remember: reply with valid YAML documents only, as described here.");
             return prompt.ToString();
         }
