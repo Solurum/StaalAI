@@ -1,7 +1,7 @@
-Title: Add all missing XML code documentation.
+Title: Unit Tests
 
 Description:
-The current code does not have much if any valid XML Code Documentation.
-Go through all the sourcecode and add valid XML Code Documentation for all public classes and methods.
+Please consider all the current code. Write a very extensive unit test battery to avoid regression and find and prevent introducing bugs later on.
+Test every code path, if you find a bug. You can extend the current code to fix those. Don't add new features.
 
 Comments:
