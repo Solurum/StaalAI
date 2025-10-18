@@ -1,264 +1,112 @@
-using System.Text;
-using System.Text.RegularExpressions;
-
-using Solurum.StaalAi;
-using Solurum.StaalAi.AICommands;
-
-using YamlDotNet.Core;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
-
-/// <summary>
-/// Parses YAML documents into Staal AI command instances. Supports multiple documents in a single bundle,
-/// fenced YAML blocks, and a strict separator string.
-/// </summary>
-public static class StaalYamlCommandParser
+namespace Solurum.StaalAi.AICommands
 {
-    /// <summary>
-    /// The strict document separator used when splitting multi-document YAML responses.
-    /// </summary>
-    public const string Separator =
-        "=====<<" + "STAAL//YAML//SEPARATOR//" + "2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C" + ">>" + "=====";
+    using System.Text.RegularExpressions;
 
-    private static readonly IDeserializer Yaml =
-        new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-
-    private static readonly ISerializer YamlSer =
-        new SerializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
+    using YamlDotNet.Core;
+    using YamlDotNet.Serialization;
+    using YamlDotNet.Serialization.NamingConventions;
 
     /// <summary>
-    /// Parses a YAML bundle into a list of concrete <see cref="IStaalCommand"/> instances.
-    /// The bundle may contain multiple documents separated by <see cref="Separator"/>,
-    /// or be expressed as fenced YAML blocks. Both single mapping documents and sequences of maps are supported.
+    /// Thin factory: normalize once, split on strict separator, and deserialize.
     /// </summary>
-    /// <param name="bundle">The raw YAML (and optional surrounding text) received from the AI.</param>
-    /// <returns>A read-only list of parsed <see cref="IStaalCommand"/> instances. Empty if no commands are found.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when a YAML parsing error occurs or a command type is unknown.</exception>
-    public static IReadOnlyList<IStaalCommand> ParseBundle(string bundle)
+    public static class StaalYamlCommandParser
     {
-        if (string.IsNullOrWhiteSpace(bundle)) return Array.Empty<IStaalCommand>();
+        public const string Separator =
+            "=====<<" + "STAAL//YAML//SEPARATOR//" + "2AF2E3DE-0F7B-4D0D-8E7C-5D1B8B1A4F0C" + ">>" + "=====";
 
-        // 0) FIRST: extract fenced YAML blocks (```yaml/```yml or ~~~yaml/~~~yml).
-        // If we find any, we ONLY parse those blocks and ignore surrounding prose.
-        var fenced = ExtractFencedYamlBlocks(bundle);
-        List<string> docs;
+        private static readonly IDeserializer Yaml =
+            new DeserializerBuilder()
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .IgnoreUnmatchedProperties()
+                .Build();
 
-        if (fenced.Count > 0)
+        /// <summary>
+        /// Parse using normalization; returns empty for empty/whitespace input.
+        /// Throws InvalidOperationException if canonical contains no valid commands.
+        /// </summary>
+        public static IReadOnlyList<IStaalCommand> ParseBundle(string bundle)
         {
-            docs = fenced;
-        }
-        else if (bundle.Contains(Separator, StringComparison.Ordinal))
-        {
-            // 1) Prefer the exact separator.
-            // Preserve docs EXACTLY as-is (no trimming), because YAML '|' needs trailing LF.
-            docs = bundle.Split(Separator, StringSplitOptions.None).ToList();
-        }
-        else
-        {
-            // 2) Accept bare "=====" lines as fallback (preserves exact text segments).
-            docs = FallbackSplitOnEqualsLine(bundle);
+            if (string.IsNullOrWhiteSpace(bundle)) return Array.Empty<IStaalCommand>(); // keep old behavior
+
+            var normalized = StaalYamlNormalizer.Normalize(bundle, out _);
+            return DeserializeCanonical(normalized);
         }
 
-        // 3) Drop pure-whitespace docs; DO NOT trim ends (preserve block scalars).
-        //    Also, strip any leading prose until the first YAML-looking key.
-        docs = docs.Select(RemoveLeadingNonYaml)
-                   .Where(s => !string.IsNullOrWhiteSpace(s))
-                   .ToList();
-
-        var result = new List<IStaalCommand>(docs.Count);
-
-        foreach (var raw in docs)
+        /// <summary>
+        /// Overload that returns the canonical YAML and whether normalization changed anything.
+        /// </summary>
+        public static IReadOnlyList<IStaalCommand> ParseBundle(string bundle, out string canonicalYaml, out bool changed)
         {
-            // Try single mapping doc
-            if (TryParseMappingDoc(raw, out var oneOrMore))
+            if (string.IsNullOrWhiteSpace(bundle))
             {
-                result.AddRange(oneOrMore);
-                continue;
+                canonicalYaml = string.Empty;
+                changed = false;
+                return Array.Empty<IStaalCommand>();
             }
 
-            // Try sequence-of-maps (flatten)
+            canonicalYaml = StaalYamlNormalizer.Normalize(bundle, out changed);
+            return DeserializeCanonical(canonicalYaml);
+        }
+
+        // ---------------- internals ----------------
+
+        private static IReadOnlyList<IStaalCommand> DeserializeCanonical(string canonical)
+        {
+            if (string.IsNullOrEmpty(canonical))
+                throw new InvalidOperationException("No valid STAAL commands were found. Each YAML document must include a 'type' key.");
+
+            // IMPORTANT: Do NOT TrimEntries here — it removes the trailing blank line
+            // that represents the final LF for '|' block scalars.
+            var parts = canonical.Split(Separator, StringSplitOptions.None)
+                                 .Where(p => !string.IsNullOrEmpty(p)) // manual remove empty, without trimming
+                                 .ToList();
+
+            var result = new List<IStaalCommand>(parts.Count);
+
+            foreach (var doc in parts)
+            {
+                var cmd = ParseMappingDocByType(doc);
+                if (cmd != null) result.Add(cmd);
+            }
+
+            if (result.Count == 0)
+                throw new InvalidOperationException("No valid STAAL commands were found. Each YAML document must include a 'type' key.");
+
+            return result;
+        }
+
+        private static IStaalCommand ParseMappingDocByType(string yaml)
+        {
+            Dictionary<string, object> peek;
             try
             {
-                var seq = Yaml.Deserialize<List<Dictionary<string, object>>>(raw);
-                if (seq != null && seq.Count > 0)
-                {
-                    foreach (var map in seq)
-                    {
-                        if (map == null || map.Count == 0) continue;
-                        if (!map.ContainsKey("type")) continue;
-
-                        var yamlMap = YamlSer.Serialize(map);
-                        var parsed = ParseMappingDocByType(yamlMap);
-                        result.Add(parsed);
-                    }
-                    continue;
-                }
+                peek = Yaml.Deserialize<Dictionary<string, object>>(yaml);
             }
             catch (YamlException ex)
             {
-                var yamlRules =
-                    @"YAML Rules (must follow)
-
-                    1. Key–Value format
-                       - Always write as `key: value` (with one space after the colon).
-                       - Example:
-                         type: STAAL_STATUS
-
-                    2. Block scalars (`|`, `|-`, `|+`)
-                       - After `|`/`|-`/`|+`, indent all content lines at least 2 spaces.
-                       - Example:
-                         statusMsg: |-
-                           First line
-                           Second line
-
-                    3. Multi-line values
-                       - Never put plain text directly under a key if it spans multiple lines; always use a block scalar (`|` or `|-`).
-
-                    4. Document separators
-                       - Separate multiple YAML documents with a line containing exactly:
-                         " + StaalSeparator.value;
-
-                throw new InvalidOperationException($"INVALID YAML with exception {ex} - Please check you're sending valid YAML: " + yamlRules);
+                throw new InvalidOperationException($"Invalid YAML: {ex.Message}");
             }
-        }
 
-        return result;
-    }
+            if (!peek.TryGetValue("type", out var tObj) || tObj is null)
+                throw new InvalidOperationException("YAML command missing 'type'.");
 
-    // --- helpers ---
+            var type = tObj.ToString() ?? string.Empty;
 
-    /// <summary>
-    /// Extracts all fenced YAML blocks (```yaml / ```yml, or ~~~yaml / ~~~yml).
-    /// Preserves the inner content EXACTLY as-is (no trimming).
-    /// If none are found, returns an empty list.
-    /// </summary>
-    private static List<string> ExtractFencedYamlBlocks(string s)
-    {
-        var docs = new List<string>();
-
-        // Matches:
-        //   - Opening fence of backticks or tildes, length >= 3, captured as group 1
-        //   - Optional whitespace, then language "yaml" or "yml" (case-insensitive), then rest of the line
-        //   - Newline
-        //   - Lazy capture (group 2) of everything up to a closing fence with the exact same delimiter
-        //   - Closing fence on its own line (optionally preceded by whitespace)
-        //
-        // Flags: Singleline (dot matches newline) + Multiline (^ and $ per line)
-        var rx = new Regex(
-            @"(?ims)^[ \t]*([`~]{3,})[ \t]*(?:ya?ml)\b[^\n]*\n(.*?)[ \t]*\n[ \t]*\1[ \t]*$",
-            RegexOptions.CultureInvariant);
-
-        var matches = rx.Matches(s);
-        foreach (Match m in matches)
-        {
-            if (m.Success)
+            // Deserialize into the correct POCO
+            return type switch
             {
-                // Group 2 is the inner block. Preserve exactly as captured.
-                var content = m.Groups[2].Value;
-                docs.Add(content);
-            }
+                "STAAL_CONTENT_REQUEST" => Yaml.Deserialize<StaalContentRequest>(yaml),
+                "STAAL_CONTENT_DELETE" => Yaml.Deserialize<StaalContentDelete>(yaml),
+                "STAAL_CONTENT_CHANGE" => Yaml.Deserialize<StaalContentChange>(yaml),
+                "STAAL_GET_WORKING_DIRECTORY_STRUCTURE" => Yaml.Deserialize<StaalGetWorkingDirectoryStructure>(yaml),
+                "STAAL_CI_LIGHT_REQUEST" => Yaml.Deserialize<StaalCiLightRequest>(yaml),
+                "STAAL_CI_HEAVY_REQUEST" => Yaml.Deserialize<StaalCiHeavyRequest>(yaml),
+                "STAAL_FINISH_OK" => Yaml.Deserialize<StaalFinishOk>(yaml),
+                "STAAL_FINISH_NOK" => Yaml.Deserialize<StaalFinishNok>(yaml),
+                "STAAL_STATUS" => Yaml.Deserialize<StaalStatus>(yaml),
+                "STAAL_CONTINUE" => Yaml.Deserialize<StaalContinue>(yaml),
+                _ => throw new NotSupportedException($"Unknown command type '{type}'.")
+            };
         }
-
-        return docs;
-    }
-
-    private static List<string> FallbackSplitOnEqualsLine(string s)
-    {
-        var docs = new List<string>();
-        var regex = new Regex(@"^\s*={5,}\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);
-
-        int lastIdx = 0;
-        foreach (Match m in regex.Matches(s))
-        {
-            int start = m.Index;
-            docs.Add(s.Substring(lastIdx, start - lastIdx)); // exact slice, no trimming
-            lastIdx = m.Index + m.Length;
-
-            // eat a single trailing newline after the separator, if present
-            if (lastIdx < s.Length && s[lastIdx] == '\r') lastIdx++;
-            if (lastIdx < s.Length && s[lastIdx] == '\n') lastIdx++;
-        }
-        if (lastIdx < s.Length)
-            docs.Add(s.Substring(lastIdx));
-
-        if (docs.Count == 0) docs.Add(s);
-        return docs;
-    }
-
-    private static string RemoveLeadingNonYaml(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return string.Empty;
-
-        using var sr = new StringReader(s);
-        string? line;
-        var sb = new StringBuilder();
-        bool started = false;
-
-        // Very permissive YAML key matcher: <non-#, non-space><...>:
-        var keyLine = new Regex(@"^\s*[^#\s][^:]*\s*:\s*");
-
-        while ((line = sr.ReadLine()) != null)
-        {
-            if (!started)
-            {
-                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                if (!keyLine.IsMatch(line)) continue;   // still prose → skip
-                started = true;                          // first YAML-looking key
-            }
-            sb.AppendLine(line);
-        }
-
-        // If we never found a key line, return original so single-doc logic can throw
-        return started ? sb.ToString() : s;
-    }
-
-    private static bool TryParseMappingDoc(string raw, out List<IStaalCommand> cmds)
-    {
-        cmds = new();
-        try
-        {
-            var peek = Yaml.Deserialize<Dictionary<string, object>>(raw);
-            if (peek == null || !peek.ContainsKey("type"))
-                return false; // NOT a proper single mapping command; let caller try sequence fallback
-
-            // This will throw InvalidOperationException if 'type' is missing/empty
-            var cmd = ParseMappingDocByType(raw);
-            cmds.Add(cmd);
-            return true;
-        }
-        catch (YamlException)
-        {
-            // Not a mapping doc; caller will try sequence fallback
-            return false;
-        }
-    }
-
-    private static IStaalCommand ParseMappingDocByType(string yaml)
-    {
-        var peek = Yaml.Deserialize<Dictionary<string, object>>(yaml);
-        if (!peek.TryGetValue("type", out var tObj) || tObj is null)
-            throw new InvalidOperationException("YAML command missing 'type'.");
-
-        var type = tObj.ToString() ?? string.Empty;
-
-        return type switch
-        {
-            "STAAL_CONTENT_REQUEST" => Yaml.Deserialize<StaalContentRequest>(yaml),
-            "STAAL_CONTENT_DELETE" => Yaml.Deserialize<StaalContentDelete>(yaml),
-            "STAAL_CONTENT_CHANGE" => Yaml.Deserialize<StaalContentChange>(yaml),
-            "STAAL_GET_WORKING_DIRECTORY_STRUCTURE" => Yaml.Deserialize<StaalGetWorkingDirectoryStructure>(yaml),
-            "STAAL_CI_LIGHT_REQUEST" => Yaml.Deserialize<StaalCiLightRequest>(yaml),
-            "STAAL_CI_HEAVY_REQUEST" => Yaml.Deserialize<StaalCiHeavyRequest>(yaml),
-            "STAAL_FINISH_OK" => Yaml.Deserialize<StaalFinishOk>(yaml),
-            "STAAL_FINISH_NOK" => Yaml.Deserialize<StaalFinishNok>(yaml),
-            "STAAL_STATUS" => Yaml.Deserialize<StaalStatus>(yaml),
-            "STAAL_CONTINUE" => Yaml.Deserialize<StaalContinue>(yaml),
-            _ => throw new NotSupportedException($"Unknown command type '{type}'.")
-        };
     }
 }

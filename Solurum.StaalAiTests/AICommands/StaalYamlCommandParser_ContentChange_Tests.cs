@@ -59,6 +59,105 @@ namespace Solurum.StaalAi.Tests
         }
 
         [TestMethod]
+        public void Sequence_With_CommandAlias_And_LeadingSpace_Parses_NoNulls_And_Yields_Status_And_ContentRequest()
+        {
+            // Arrange: prose + YAML sequence; first item uses 'command:' alias and a block scalar.
+            var yaml = string.Join("\r\n", new[]
+            {
+        "Some introductory prose that should be ignored by the parser.",
+        "It explains what's coming next and is not YAML at the top level.",
+        "",
+        "- command: STAAL_STATUS",
+        "   content: |",
+        "     Ready to create an extensive unit test suite.",
+        "     Plan:",
+        "     - Read iron.staal.txt to follow repo-specific rules.",
+        "     - Inspect current tests and source code to find gaps.",
+        "     - Propose and add comprehensive tests for all code paths.",
+        "     - If tests reveal bugs, fix them without adding new features.",
+        "     - Continuously run light CI after changes to ensure green build.",
+        "- command: STAAL_CONTENT_REQUEST",
+        "  content: |",
+        "    filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt",
+    });
+
+            // Act
+            var cmds = StaalYamlCommandParser.ParseBundle(yaml);
+
+            // Assert
+            cmds.Should().NotBeNull();
+            cmds.Should().HaveCount(2, "the sequence contains two command items");
+            cmds.Should().AllSatisfy(c => c.Should().NotBeNull("parser must not add null commands"));
+
+            // Order & types
+            cmds[0].Should().BeOfType<StaalStatus>("first item is a STAAL_STATUS using 'command:' alias");
+            cmds[1].Should().BeOfType<StaalContentRequest>("second item is a STAAL_CONTENT_REQUEST using 'command:' alias");
+
+            // STAAL_STATUS payload mapped from the literal 'content' -> StatusMsg
+            var status = (StaalStatus)cmds[0];
+            status.Type.Should().Be("STAAL_STATUS");
+            status.StatusMsg.Should().NotBeNullOrWhiteSpace("status payload should be captured");
+            status.StatusMsg.Should().Contain("Ready to create an extensive unit test suite.")
+                              .And.Contain("Plan:")
+                              .And.Contain("Continuously run light CI");
+
+            // STAAL_CONTENT_REQUEST: filePath extracted from the literal content
+            var req = (StaalContentRequest)cmds[1];
+            req.Type.Should().Be("STAAL_CONTENT_REQUEST");
+            req.FilePath.Should().Be("/home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt");
+            // If you expect FilePaths/Files to remain null when FilePath is present, you can assert that too:
+            // req.FilePaths.Should().BeNull();
+            // req.Files.Should().BeNull();
+        }
+
+        [TestMethod]
+        public void Sequence_With_CommandAlias_Parses_Status_And_ContentRequest_Correctly()
+        {
+            // Arrange
+            var yaml = string.Join("\r\n", new[]
+            {
+        "- command: STAAL_STATUS",
+        "  content: |",
+        "    Ready to create an extensive unit test suite.",
+        "    Plan:",
+        "    - Read iron.staal.txt to follow repo-specific rules.",
+        "    - Inspect current tests and source code to find gaps.",
+        "    - Propose and add comprehensive tests for all code paths.",
+        "    - If tests reveal bugs, fix them without adding new features.",
+        "    - Continuously run light CI after changes to ensure green build.",
+        "- command: STAAL_CONTENT_REQUEST",
+        "  content: |",
+        "    filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt",
+    });
+
+            // Act
+            var cmds = StaalYamlCommandParser.ParseBundle(yaml);
+
+            // Assert
+            cmds.Should().NotBeNull();
+            cmds.Should().HaveCount(2, "the YAML defines two command items");
+
+            // STAAL_STATUS: StatusMsg should be filled from the literal 'content'
+            var status = cmds.OfType<StaalStatus>().Single();
+            status.Type.Should().Be("STAAL_STATUS");
+            status.StatusMsg.Should().NotBeNullOrWhiteSpace()
+                  .And.Contain("Ready to create an extensive unit test suite.")
+                  .And.Contain("Continuously run light CI");
+
+            // STAAL_CONTENT_REQUEST: FilePath should be extracted from the literal 'content'
+            var req = cmds.OfType<StaalContentRequest>().Single();
+            req.Type.Should().Be("STAAL_CONTENT_REQUEST");
+            req.FilePath.Should().Be("/home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt");
+
+            // Optional extras depending on your model:
+            // If you expect FilePaths/Files to remain null when FilePath is set:
+            // req.FilePaths.Should().BeNull();
+            // req.Files.Should().BeNull();
+        }
+
+
+
+        [TestMethod]
         public void ContentChange_CSharp_Simple_Clip()
         {
             var content = string.Join("\n", new[]
