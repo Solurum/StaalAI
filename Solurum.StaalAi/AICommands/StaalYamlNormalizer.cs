@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi.AICommands
+namespace Solurum.StaalAi.AICommands
 {
     using System.Text;
     using System.Text.RegularExpressions;
@@ -102,8 +102,11 @@
 
             foreach (var segment in docs.Where(d => !string.IsNullOrWhiteSpace(d)))
             {
-                // Sequence-of-commands path
-                if (TrySplitTopLevelSequenceItems(segment, out var items) && items.Count > 0)
+                // Prefer single-mapping path when a top-level 'requests' key exists, to allow nested splitting later.
+                bool hasTopLevelRequests = TryDetectTopLevelRequests(segment);
+
+                // Sequence-of-commands path (only when no wrapper 'requests' key is present)
+                if (!hasTopLevelRequests && TrySplitTopLevelSequenceItems(segment, out var items) && items.Count > 0)
                 {
                     changed = true; // sequence -> multiple single docs
                     foreach (var item in items)
@@ -150,10 +153,23 @@
                     changed = true;
                 }
 
-                var normalizedMap = NormalizeMapShape(singleMap, ref changed);
+                // Support nested 'requests' sequence under a single command.
+                var nestedRequests = ExtractNestedRequests(singleMap, out var parentWithoutRequests, ref changed);
+
+                // Emit parent command (if it has/normalizes to a valid 'type')
+                var normalizedMap = NormalizeMapShape(parentWithoutRequests, ref changed);
                 var yamlDoc = BuildCanonicalYaml(normalizedMap, ref changed);
                 if (!string.IsNullOrWhiteSpace(yamlDoc))
                     canonicalDocs.Add(yamlDoc);
+
+                // Emit each nested request as its own doc
+                foreach (var reqMap in nestedRequests)
+                {
+                    var normalizedReq = NormalizeMapShape(reqMap, ref changed);
+                    var yamlReq = BuildCanonicalYaml(normalizedReq, ref changed);
+                    if (!string.IsNullOrWhiteSpace(yamlReq))
+                        canonicalDocs.Add(yamlReq);
+                }
             }
 
             // 4) Join canonical docs with strict separator
@@ -779,6 +795,82 @@
             if (string.IsNullOrWhiteSpace(text)) return null;
             var m = Regex.Match(text, @"(?mi)^\s*filePath\s*:\s*(.+)\s*$");
             return m.Success ? m.Groups[1].Value.Trim() : null;
+        }
+
+        // NEW: helpers to extract nested requests under a single mapping
+        private static List<Dictionary<string, object>> ExtractNestedRequests(Dictionary<string, object> input, out Dictionary<string, object> parentWithoutRequests, ref bool changed)
+        {
+            parentWithoutRequests = new Dictionary<string, object>(input, StringComparer.OrdinalIgnoreCase);
+
+            if (!input.TryGetValue("requests", out var reqObj) || reqObj is null)
+            {
+                return new List<Dictionary<string, object>>();
+            }
+
+            var results = new List<Dictionary<string, object>>();
+
+            if (reqObj is IEnumerable<object> objEnum)
+            {
+                foreach (var item in objEnum)
+                {
+                    if (TryToStringObjectDict(item, out var dict))
+                    {
+                        results.Add(dict);
+                    }
+                }
+            }
+            else if (TryToStringObjectDict(reqObj, out var single))
+            {
+                results.Add(single);
+            }
+
+            if (results.Count > 0)
+            {
+                // Remove 'requests' from the parent
+                if (parentWithoutRequests.ContainsKey("requests"))
+                {
+                    parentWithoutRequests.Remove("requests");
+                    changed = true;
+                }
+            }
+
+            return results;
+        }
+
+        private static bool TryToStringObjectDict(object? obj, out Dictionary<string, object> dict)
+        {
+            dict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            if (obj is null) return false;
+
+            if (obj is Dictionary<string, object> dso)
+            {
+                foreach (var kv in dso) dict[kv.Key] = kv.Value!;
+                return true;
+            }
+
+            if (obj is Dictionary<object, object> doo)
+            {
+                foreach (var kv in doo) dict[kv.Key?.ToString() ?? ""] = kv.Value!;
+                return true;
+            }
+
+            // Attempt YAML round-trip if it's a scalar string block
+            if (obj is string s && TryParseEmbeddedYaml(s, out var parsed))
+            {
+                foreach (var kv in parsed) dict[kv.Key] = kv.Value!;
+                return dict.Count > 0;
+            }
+
+            return false;
+        }
+
+        private static bool TryDetectTopLevelRequests(string segment)
+        {
+            if (TryDeserializeMapPermissive(segment, out var map))
+            {
+                return map.ContainsKey("requests");
+            }
+            return false;
         }
     }
 }

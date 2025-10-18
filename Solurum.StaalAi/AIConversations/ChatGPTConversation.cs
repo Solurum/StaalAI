@@ -350,7 +350,11 @@ namespace Solurum.StaalAi.AIConversations
             responses.CompleteAdding();
             try
             {
-                responseThread?.Join(TimeSpan.FromSeconds(5));
+                // Avoid joining the current response thread (would deadlock or stall)
+                if (responseThread != null && Thread.CurrentThread.ManagedThreadId != responseThread.ManagedThreadId)
+                {
+                    responseThread.Join(TimeSpan.FromSeconds(5));
+                }
             }
             catch { /* ignore */ }
 
@@ -476,6 +480,12 @@ namespace Solurum.StaalAi.AIConversations
 
                     cmd.Execute(logger, this, fs, workingDirPath);
                 }
+            }
+
+            // If conversation was stopped during command execution (e.g., FINISH_OK/NOK), do not send more.
+            if (!running)
+            {
+                return;
             }
 
             if (!SendNextBuffer() && running)
