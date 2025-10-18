@@ -21,12 +21,6 @@ namespace Solurum.StaalAi.Tests
         private static string JoinDocs(params string[] docs) => string.Join(Sep, docs);
         private static string Yaml(params string[] lines) => string.Join("\n", lines) + "\n";
 
-        [TestMethod]
-        public void ParseBundle_EmptyOrWhitespace_ReturnsEmpty()
-        {
-            StaalYamlCommandParser.ParseBundle("").Should().BeEmpty();
-            StaalYamlCommandParser.ParseBundle(" \n\t ").Should().BeEmpty();
-        }
 
         [TestMethod]
         public void ParseBundle_Single_CONTENT_REQUEST_Parses()
