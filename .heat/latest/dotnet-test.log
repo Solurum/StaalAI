@@ -3,9 +3,9 @@
   Solurum.StaalAi -> /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/bin/Debug/net8.0/Solurum.StaalAi.dll
   Solurum.StaalAiTests -> /home/runner/work/StaalAI/StaalAI/Solurum.StaalAiTests/bin/Debug/net8.0/Solurum.StaalAiTests.dll
 Test run for /home/runner/work/StaalAI/StaalAI/Solurum.StaalAiTests/bin/Debug/net8.0/Solurum.StaalAiTests.dll (.NETCoreApp,Version=v8.0)
-VSTest version 17.11.1 (x64)
+VSTest version 17.14.1 (x64)
 
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:    44, Skipped:     0, Total:    44, Duration: 421 ms - Solurum.StaalAiTests.dll (net8.0)
+Passed!  - Failed:     0, Passed:    67, Skipped:     0, Total:    67, Duration: 636 ms - Solurum.StaalAiTests.dll (net8.0)

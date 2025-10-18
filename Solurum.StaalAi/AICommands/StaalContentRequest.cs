@@ -100,12 +100,6 @@ namespace Solurum.StaalAi.AICommands
             output = String.Empty;
             var paths = CollectPaths();
 
-            if (String.IsNullOrWhiteSpace(FilePath))
-            {
-                output = "Invalid Command! Missing the filePath argument!";
-                return false;
-            }
-
             if (paths.Count == 0)
             {
                 output = "ERR: No file paths were provided. Acceptable shapes are: 'filePath', 'filePaths', or 'files: [{ filePath }]'.";
