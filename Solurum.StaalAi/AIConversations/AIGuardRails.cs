@@ -27,8 +27,8 @@ namespace Solurum.StaalAi.AIConversations
         int maxConsecutiveValidateErrors = 3;
         int currentConsecutiveValidateErrors = 0;
 
-        int maxResponsesWithoutDocumentEditsStop = 6;
-        int maxResponsesWithoutDocumentEditsWarning = 3;
+        int maxResponsesWithoutDocumentEditsStop = 20;
+        int maxResponsesWithoutDocumentEditsWarning = 10;
         int currentResponsesWithoutDocumentEdits = 0;
 
         int maxTotalResponses = 200;

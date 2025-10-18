@@ -1,0 +1,4 @@
+﻿Try to follow the same code structure as the existing tests.
+Use MSTest
+Use FluentAssertions Version="7.2.0"
+Use MOQ for mocking.
