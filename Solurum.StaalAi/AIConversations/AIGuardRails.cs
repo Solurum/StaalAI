@@ -97,9 +97,11 @@ namespace Solurum.StaalAi.AIConversations
 
             // Try to parse the response
             IReadOnlyList<IStaalCommand> allCommands;
+            bool hadToCleanInput = false;
+            string canonicalYaml;
             try
             {
-                allCommands = StaalYamlCommandParser.ParseBundle(response);
+                allCommands = StaalYamlCommandParser.ParseBundle(response, out canonicalYaml, out hadToCleanInput);
                 currentConsecutiveErrors = 0;
             }
             catch (Exception ex)
@@ -181,6 +183,11 @@ namespace Solurum.StaalAi.AIConversations
             if (currentConsecutiveValidateErrors >= maxConsecutiveValidateErrors)
             {
                 throw new InvalidOperationException($"ERR - Hard Stop - AI Replied with Invalid Data {currentConsecutiveValidateErrors} times. Last response: {response}");
+            }
+
+            if (hadToCleanInput)
+            {
+                conversation.AddReplyToBuffer($"WARNING! I managed to parse your response, do not retry it or acknowledge this warning, but I was actually expecting the following response which you can learn from: {canonicalYaml}", "WARNING");
             }
 
             if (hadFailures)
