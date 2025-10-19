@@ -112,29 +112,33 @@ namespace Solurum.StaalAi.Tests.Conversations
         // ---------- Tests: No-document-edits window ----------------------------
 
         [TestMethod]
-        public void NoDocumentEdits_Should_Warn_After_3_And_Stop_After_6()
+        public void NoDocumentEdits_Should_Warn_After_10_And_Stop_After_20()
         {
             var (sut, convo, _, _) = CreateSut();
 
-            // Send 1..2 valid non-edit responses (STATUS or REQUEST) -> no warning yet
-            sut.ValidateAndParseResponse(StatusYaml("step1")).Should().NotBeNull();
-            sut.ValidateAndParseResponse(ContentRequestYaml("/abs/x.cs")).Should().NotBeNull();
+            // Send 1..10 valid non-edit responses (STATUS or REQUEST) -> no warning yet
+            for (int i = 1; i <= 10; i++)
+            {
+                sut.ValidateAndParseResponse(StatusYaml($"step{i}")).Should().NotBeNull();
+            }
 
-            // Third non-edit -> warning begins
-            sut.ValidateAndParseResponse(StatusYaml("step3")).Should().NotBeNull();
+            // 11th non-edit -> first warning
+            sut.ValidateAndParseResponse(StatusYaml("step11")).Should().NotBeNull();
             convo.Verify(c => c.AddReplyToBuffer(
                     It.Is<string>(s => s.Contains("did not contain any actual content change commands", StringComparison.OrdinalIgnoreCase)),
                     "WARNING"),
                 Times.AtLeastOnce);
 
-            // Fourth & Fifth non-edit -> still warnings (no throw yet)
-            sut.ValidateAndParseResponse(StatusYaml("step4")).Should().NotBeNull();
-            sut.ValidateAndParseResponse(StatusYaml("step5")).Should().NotBeNull();
+            // 12..19 non-edits -> still warnings (no throw yet)
+            for (int i = 12; i < 20; i++)
+            {
+                sut.ValidateAndParseResponse(StatusYaml($"step{i}")).Should().NotBeNull();
+            }
 
-            // Sixth non-edit -> hard stop
-            Action act = () => sut.ValidateAndParseResponse(StatusYaml("step6"));
+            // 20th non-edit -> hard stop
+            Action act = () => sut.ValidateAndParseResponse(StatusYaml("step20"));
             act.Should().Throw<InvalidOperationException>()
-               .WithMessage("*Hard Stop - AI Replied 6 times without any document edits*");
+               .WithMessage("*Hard Stop - AI Replied 20 times without any document edits*");
         }
 
         [TestMethod]
