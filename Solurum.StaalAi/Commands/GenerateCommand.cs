@@ -83,7 +83,7 @@ namespace Solurum.StaalAi.Commands
                 if (String.IsNullOrWhiteSpace(openApiModel)) throw new InvalidOperationException("Missing Environment Variable: StaalOpenApiModel");
 
                 IConversation conversation = new ChatGPTConversation(logger, fs, WorkingDirectory.FullName, openApiToken, openApiModel);
-                if (conversation.Start(fullPrompt))
+                if (!conversation.Start(fullPrompt))
                 {
                     return (int)ExitCodes.Ok;
                 }
