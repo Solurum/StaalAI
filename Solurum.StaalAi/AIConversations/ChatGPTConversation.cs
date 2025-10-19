@@ -287,7 +287,6 @@ namespace Solurum.StaalAi.AIConversations
                         }
                         catch (InvalidOperationException)
                         {
-                            stoppedWithFailure = true;
                             break; // Completed
                         }
 
