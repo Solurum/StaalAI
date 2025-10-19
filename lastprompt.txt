@@ -1,58 +1,195 @@
-Title: Extend YAML Normalization and fix error at end
+Title: Extend and Implement `STAAL_CI_HEAVY_REQUEST`
 
 Description:
-Two problems to tackle. Change the production code, also write new unit tests to make sure everything works.
 
-First Problem
- The YAML Normalization should be extended so it can handle what an LLM sent me as the first message last time.
+  ## Extend and Implement `STAAL_CI_HEAVY_REQUEST`
 
-  command: STAAL_STATUS
-  message: |
-    Ready to create an extensive unit test suite.
-    Plan:
-    - Read iron.staal.txt and follow its rules.
-    - Inspect project structure, code, and existing tests.
-    - Identify untested code paths and edge cases.
-    - Add comprehensive unit tests.
-    - If defects arise, minimally fix code to stabilize tests.
-    - Run light CI after changes and iterate.
+  We already have a working implementation for `STAAL_CI_LIGHT_REQUEST` (the Light CI flow).
+  Your task is to extend the system to fully implement `STAAL_CI_HEAVY_REQUEST`, following the design principles below.
 
-requests:
-  - command: STAAL_CONTENT_REQUEST
-    filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt
-  - command: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
-    fromPath: /home/runner/work/StaalAI/StaalAI
-    includeContentPattern: ""
-    excludeContentPattern: "*/.git/*"
+  ------------------------------------------------------------------------
 
+  ### Goal
 
-Second problem, everything the tool stops, it throws a strange exception. I want you to figure out what causes that and fix it.
-See the end output of previous run:
+  Implement the logic behind `STAAL_CI_HEAVY_REQUEST`, which behaves like a long-running CI
+  (synchronous trigger, polling, result collection), but gracefully transitions into an
+  asynchronous Heavy mode if the pipeline exceeds a one-hour threshold.
 
-[13:04:56 DBG] [STAAL_FINISH_OK] Unit test suite expansion and minor validation fix
+  The flow should start as a normal integrated CI run. If total polling time exceeds one hour:
+    - The tool stops gracefully.
+    - Saves the current conversation and state.
+    - Commits and pushes all work.
+    - Creates a marker notice indicating that the tool should be retriggered later once CI results are available.
 
-Summary
-- Added comprehensive unit tests across commands and guardrails:
-  - StaalContentRequest: validation for all shapes, execution paths (exists/missing/outside/exception)
-  - StaalContentDelete: happy path, blocked path, exception, validation
-  - StaalGetWorkingDirectoryStructure: success and error cases
-  - Basic commands: Status, Continue, FinishOk/Nok behaviors
-  - AIGuardRails: normalization warning emission; consecutive validation errors hard-stop
-- Fixed StaalContentRequest.IsValid to accept filePaths/files shapes (previously required filePath only).
-- Total tests: 67 | All tests passed.
+  When retriggered later, the tool detects the previous Heavy CI context and resumes execution
+  by processing the results (logs, artifacts, etc.) and returning a final summary.
 
-Notes
-- No new features introduced; only validation fix and tests.
-- Follow-ups (non-blocking): consider addressing nullable reference warnings in PowerShellRunner and ChatGPTConversation.
-[13:05:01 INF] ChatGPT conversation stopped. Duration: 237s | API Calls: 8 | Bytes In: 192261 | Bytes Out: 33288 | Input Tokens: 149898 | Output Tokens: 12422 | Est. Cost (USD): $0.0125
-[13:05:01 ERR] Critical Error while handling ChatGPT response. Stopping.
-System.InvalidOperationException: Conversation not started. Call Start() first.
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.SendNextBuffer() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 143
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.HandleResponses(String response) in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 481
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.<>c__DisplayClass28_0.<Start>b__0() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 298
-[13:05:01 DBG] Finished GenerateCommand.
-[13:05:01 DBG] Hosting stopping
-[13:05:01 INF] Application is shutting down...
-[13:05:01 DBG] Hosting stopped
+  ------------------------------------------------------------------------
+
+  ### Behavior Flow
+
+  1. Configuration and Validation
+     - On `STAAL_CI_HEAVY_REQUEST`, check for:
+       - `.heat/carbon.staal.xml` defining CI/CD configuration.
+       - Required environment variables such as `STAAL_GH_TOKEN`.
+     - If missing or invalid, return the existing “not implemented” message.
+     - Configuration determines:
+       - The CI/CD technology (only "github" for now).
+       - The workflow or pipeline name.
+       - Non-secret settings like timeout and polling interval.
+
+  2. Preparing the Branch and Commit
+     - Ensure all local changes are committed and pushed.
+     - If the branch does not exist remotely, create and push it.
+     - Store metadata about the request in `.heat/ci_context.json` including:
+       timestamp, branch name, commit SHA, request type, and mode (active or waiting).
+
+  3. Triggering the External Pipeline
+     - Trigger the configured pipeline based on `.heat/carbon.staal.xml`.
+     - For GitHub:
+       - Use the workflow dispatch API with a unique request ID and branch name.
+       - Confirm the run started successfully.
+
+  4. Polling for Results
+     - Periodically poll for workflow status and send keep-alive updates if applicable.
+     - Continue polling until:
+       - The workflow completes successfully or fails, or
+       - One hour has elapsed since start.
+
+  5. Transition to Heavy Mode (after one hour)
+     - When polling exceeds one hour:
+       - Save the current conversation/context to `.heat/conversation.json`.
+       - Create `.heat/heavy_ci_pending.json` with metadata (workflow ID, run URL, branch, request ID).
+       - Write `.heat/heavy_ci_notice.txt` stating that the tool paused and should be retriggered later.
+       - Exit gracefully, printing a message such as:
+         “Heavy CI is still running. Re-run the CLI `continue` command when results are available.”
+
+  6. CLI Resume Command (System.CommandLine)
+     - Implement a new **System.CommandLine.Command** for users of the dotnet tool, not the LLM.
+
+       Command details:
+         - Name: `continue`
+         - Parent: added to the Staal tool root command (e.g., `staal continue`)
+         - Aliases: `resume`, `cont`
+         - Options:
+             --repo-root <path>      (optional; defaults to current directory)
+             --no-fetch              (optional; skip git fetch/pull)
+             --timeout-min <int>     (optional; override polling timeout)
+             -v | --verbose          (optional)
+
+       Command behavior:
+         1. Locate `.heat/heavy_ci_pending.json` and `.heat/conversation.json`.
+            If not found → print “No paused Heavy CI found.” and exit with error.
+         2. If `--no-fetch` is not set → perform `git fetch/pull` on the recorded branch.
+         3. Check external pipeline status:
+            - If still running → print status and exit 0.
+            - If completed:
+              - Download workflow logs and artifacts.
+              - Store them under `.heat/` (e.g., `.heat/ci_logs.zip`, `.heat/artifacts/...`).
+              - Generate `.heat/ci_summary.md` with workflow conclusion, duration, and failing steps.
+              - Remove `.heat/heavy_ci_pending.json`.
+              - Print summary to console and exit with a success/failure code.
+
+  ------------------------------------------------------------------------
+
+  ### Architecture Guidelines
+
+  - Reuse existing interfaces from the Light CI implementation if needed.
+  - Implement a GitHubCiProvider that handles:
+    - Workflow dispatch.
+    - Polling for workflow runs.
+    - Collecting logs and artifacts.
+  - Implement a HeavyCiOrchestrator that:
+    - Starts synchronously.
+    - Tracks elapsed time.
+    - Switches to Heavy mode after one hour.
+    - Serializes pending context for the `continue` command.
+  - File and network operations must be mockable for testing.
+
+  ------------------------------------------------------------------------
+
+  ### Configuration Example
+
+  `.heat/carbon.staal.xml`
+  <carbon>
+    <heavyci technology="github">
+      <github owner="SkylineCommunications"
+              repo="example-project"
+              workflow="quality-check.yml"
+              timeoutMinutes="720"
+              pollSeconds="30" />
+    </heavyci>
+  </carbon>
+
+  Environment variables (document these in README.md):
+    - STAAL_GH_TOKEN — required GitHub token (PAT or App installation token)
+    - STAAL_CI_TIMEOUT_MIN — optional override
+    - STAAL_CI_POLL_SEC — optional override
+
+  ------------------------------------------------------------------------
+
+  ### Unit Testing Requirements
+
+  Write comprehensive unit tests with dependency injection and mocks.
+
+  Required coverage:
+    - Config validation
+      - Valid config
+      - Missing/invalid `.heat/carbon.staal.xml`
+    - Git operations
+      - Commit/push logic
+      - Branch creation
+    - Pipeline trigger
+      - Correct GitHub dispatch
+      - Missing tokens or workflow name
+    - Polling
+      - Success, failure, cancellation
+      - Timeout triggers Heavy mode
+    - Heavy mode transition
+      - Creates `.heat` files correctly
+      - Graceful exit message
+    - CLI `continue` command
+      - No pending state → error
+      - Still running → print status
+      - Completed → downloads logs/artifacts, writes summary, removes pending files
+    - Error handling
+      - API/network errors
+      - File I/O failures
+      - Clock/time simulation for >1h
+
+  Testing guidelines:
+    - Mock Git, File I/O, HTTP (GitHub API), and IClock.
+    - Assert on created/removed files, branch logic, exit codes, and console output.
+    - Use deterministic clocks to simulate long durations.
+
+  ------------------------------------------------------------------------
+
+  ### Deliverables
+
+  - Updated C# implementation for:
+      - `STAAL_CI_HEAVY_REQUEST` orchestration.
+      - System.CommandLine `continue` command for users.
+      - GitHub provider and abstraction classes.
+  - Full unit test suite with high coverage.
+  - Updated README.md documenting:
+      - Light vs Heavy flow behavior.
+      - Environment variables.
+      - Example `carbon.staal.xml`.
+      - Instructions for `staal continue`.
+
+  ------------------------------------------------------------------------
+
+  ### Summary of the End-to-End Flow
+
+  | Step | Action | Description |
+  |------|---------|-------------|
+  | 1 | User triggers `STAAL_CI_HEAVY_REQUEST` | Starts CI execution |
+  | 2 | Tool commits/pushes changes | Ensures remote branch sync |
+  | 3 | Tool triggers workflow | Dispatches GitHub Actions pipeline |
+  | 4 | Tool polls and reports | Up to 1 hour |
+  | 5 | Time > 1h → switch to Heavy mode | Saves context, writes pending state, exits |
+  | 6 | External pipeline continues | Runs to completion independently |
+  | 7 | User runs `staal continue` (CLI) | Tool resumes from saved state |
+  | 8 | Tool downloads logs/artifacts | Writes summary and returns final result |
 
 Comments:
