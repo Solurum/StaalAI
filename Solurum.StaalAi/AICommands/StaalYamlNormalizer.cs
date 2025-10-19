@@ -53,9 +53,9 @@ namespace Solurum.StaalAi.AICommands
             @"(?m)^(?<indent>[ \t]*)(?<k>type|command)\s*:(?<rest>.*)$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-        // Detect newContent chomp from raw segment text
+        // Detect newContent/newText chomp from raw segment text
         private static readonly Regex NewContentChompRx = new(
-            @"(?mi)^\s*newContent\s*:\s*\|(?<chomp>[+-])?\s*$",
+            @"(?mi)^\s*(newContent|newText)\s*:\s*\|(?<chomp>[+-])?\s*$",
             RegexOptions.CultureInvariant);
 
         /// <summary>
@@ -70,6 +70,7 @@ namespace Solurum.StaalAi.AICommands
             // 1) Extract source docs:
             //    - Fenced YAML blocks take precedence.
             //    - Else split on the strict STAAL separator if present.
+            //    - Else split on YAML '---' document separators (top-level).
             //    - Else split on fallback "=====" lines.
             //    - Else use the entire bundle.
             List<string> docs;
@@ -84,7 +85,15 @@ namespace Solurum.StaalAi.AICommands
             }
             else
             {
-                docs = FallbackSplitOnEqualsLine(bundle);
+                // Start from a single chunk or fallback-equals-split, then expand by YAML '---'
+                var prelim = FallbackSplitOnEqualsLine(bundle);
+                docs = new List<string>();
+                foreach (var part in prelim)
+                {
+                    var splits = SplitOnYamlDocSeparators(part);
+                    if (splits.Count > 1) changed = true;
+                    docs.AddRange(splits);
+                }
             }
 
             // 2) Strip leading prose; keep exact content otherwise (important for block scalars)
@@ -199,6 +208,21 @@ namespace Solurum.StaalAi.AICommands
                 }
             }
 
+            // Flatten args: { args: { k:v } } -> top-level k:v (do not overwrite explicit top-level)
+            if (map.TryGetValue("args", out var argsObj) && TryToStringObjectDict(argsObj, out var argsDict) && argsDict.Count > 0)
+            {
+                foreach (var kv in argsDict)
+                {
+                    if (!map.ContainsKey(kv.Key))
+                    {
+                        map[kv.Key] = kv.Value!;
+                        changed = true;
+                    }
+                }
+                map.Remove("args");
+                changed = true;
+            }
+
             if (!map.TryGetValue("type", out var typeObj) || typeObj is null)
                 return map;
 
@@ -262,10 +286,17 @@ namespace Solurum.StaalAi.AICommands
 
                 case "STAAL_CONTENT_CHANGE":
                     {
-                        // Accept alias for newContent
-                        if (!map.ContainsKey("newContent") && map.TryGetValue("content", out var c) && c is string cs)
+                        // Accept alias for newContent: content or newText/newtext
+                        if (!map.ContainsKey("newContent"))
                         {
-                            map["newContent"] = cs; changed = true;
+                            if (map.TryGetValue("content", out var c) && c != null)
+                            {
+                                map["newContent"] = c.ToString() ?? string.Empty; changed = true;
+                            }
+                            else if (map.TryGetValue("newText", out var nt) && nt != null)
+                            {
+                                map["newContent"] = nt.ToString() ?? string.Empty; changed = true;
+                            }
                         }
 
                         // Keep only known keys (internal flag is okay to pass through)
@@ -426,6 +457,77 @@ namespace Solurum.StaalAi.AICommands
             }
             if (lastIdx < s.Length)
                 docs.Add(s.Substring(lastIdx));
+
+            if (docs.Count == 0) docs.Add(s);
+            return docs;
+        }
+
+        private static List<string> SplitOnYamlDocSeparators(string s)
+        {
+            var docs = new List<string>();
+            if (string.IsNullOrWhiteSpace(s))
+            {
+                docs.Add(s);
+                return docs;
+            }
+
+            var lines = SplitPreserveAllLines(s);
+            var current = new StringBuilder();
+            bool inScalar = false;
+            int scalarKeyIndent = -1;
+
+            static int IndentOf(string line)
+            {
+                int i = 0;
+                while (i < line.Length && line[i] == ' ') i++;
+                return i;
+            }
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+
+                if (inScalar)
+                {
+                    int ind = IndentOf(line);
+                    if (ind > scalarKeyIndent)
+                    {
+                        current.AppendLine(line);
+                        continue;
+                    }
+                    else
+                    {
+                        inScalar = false;
+                        // fall through to process this line again for '---' or keys
+                    }
+                }
+
+                // Enter block scalar if key: |
+                var sk = BlockScalarKey.Match(line);
+                if (sk.Success)
+                {
+                    scalarKeyIndent = sk.Groups["indent"].Value.Length;
+                    inScalar = true;
+                    current.AppendLine(line);
+                    continue;
+                }
+
+                // YAML document separator (top-level or with only spaces)
+                if (Regex.IsMatch(line, @"^\s*---\s*$"))
+                {
+                    // Finish previous doc (avoid adding empty leading doc)
+                    var chunk = current.ToString();
+                    if (!string.IsNullOrEmpty(chunk))
+                        docs.Add(chunk.TrimEnd('\r', '\n'));
+                    current.Clear();
+                    continue;
+                }
+
+                current.AppendLine(line);
+            }
+
+            if (current.Length > 0)
+                docs.Add(current.ToString().TrimEnd('\r', '\n'));
 
             if (docs.Count == 0) docs.Add(s);
             return docs;
