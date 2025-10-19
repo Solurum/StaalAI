@@ -1,58 +1,66 @@
-Title: Extend YAML Normalization and fix error at end
+Title: Further Improve yaml protocol
 
 Description:
-Two problems to tackle. Change the production code, also write new unit tests to make sure everything works.
+LLM's sending back invalid responses again, causing critical failures.
 
-First Problem
- The YAML Normalization should be extended so it can handle what an LLM sent me as the first message last time.
+------------
+Issue One:
 
-  command: STAAL_STATUS
+Either update the STAAL_CONTENT_CHANGE logic and the poco's to be able to handle originalText replacement into newText. Or preferrably for now update the YamlNormalization to fix the message we received into what is actually expected based on the POCO.
+
+Invalid response we received:
+
+type: STAAL_CONTENT_CHANGE
+filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiHeavyRequest.cs
+originalText: |-
+  blablabla
+newText: |-
+  blablaNewNew
+
+---------
+
+Issue Two:
+
+The initial sent message also ended up with a repair message getting sent. Check if we can normalize this as well to fit the POCO's.
+
+command: STAAL_STATUS
+args:
   message: |
-    Ready to create an extensive unit test suite.
-    Plan:
-    - Read iron.staal.txt and follow its rules.
-    - Inspect project structure, code, and existing tests.
-    - Identify untested code paths and edge cases.
-    - Add comprehensive unit tests.
-    - If defects arise, minimally fix code to stabilize tests.
-    - Run light CI after changes and iterate.
+    Ready. Plan:
+    - Inspect iron.staal.txt and current CI-related command implementations.
+    - Review StaalCiHeavyRequest, StaalCiLightRequest, StaalContinue, Program, and README.
+    - Design and implement Heavy CI orchestration, GitHub provider, and continue CLI command.
+    - Add tests and update README.
+    - Run CI light to ensure compilation.
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAiTests/iron.staal.txt
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiHeavyRequest.cs
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiLightRequest.cs
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalContinue.cs
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/Program.cs
+--- 
+command: STAAL_CONTENT_REQUEST
+args:
+  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/README.md
 
-requests:
-  - command: STAAL_CONTENT_REQUEST
-    filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt
-  - command: STAAL_GET_WORKING_DIRECTORY_STRUCTURE
-    fromPath: /home/runner/work/StaalAI/StaalAI
-    includeContentPattern: ""
-    excludeContentPattern: "*/.git/*"
-
-
-Second problem, everything the tool stops, it throws a strange exception. I want you to figure out what causes that and fix it.
-See the end output of previous run:
-
-[13:04:56 DBG] [STAAL_FINISH_OK] Unit test suite expansion and minor validation fix
-
-Summary
-- Added comprehensive unit tests across commands and guardrails:
-  - StaalContentRequest: validation for all shapes, execution paths (exists/missing/outside/exception)
-  - StaalContentDelete: happy path, blocked path, exception, validation
-  - StaalGetWorkingDirectoryStructure: success and error cases
-  - Basic commands: Status, Continue, FinishOk/Nok behaviors
-  - AIGuardRails: normalization warning emission; consecutive validation errors hard-stop
-- Fixed StaalContentRequest.IsValid to accept filePaths/files shapes (previously required filePath only).
-- Total tests: 67 | All tests passed.
-
-Notes
-- No new features introduced; only validation fix and tests.
-- Follow-ups (non-blocking): consider addressing nullable reference warnings in PowerShellRunner and ChatGPTConversation.
-[13:05:01 INF] ChatGPT conversation stopped. Duration: 237s | API Calls: 8 | Bytes In: 192261 | Bytes Out: 33288 | Input Tokens: 149898 | Output Tokens: 12422 | Est. Cost (USD): $0.0125
-[13:05:01 ERR] Critical Error while handling ChatGPT response. Stopping.
-System.InvalidOperationException: Conversation not started. Call Start() first.
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.SendNextBuffer() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 143
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.HandleResponses(String response) in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 481
-   at Solurum.StaalAi.AIConversations.ChatGPTConversation.<>c__DisplayClass28_0.<Start>b__0() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 298
-[13:05:01 DBG] Finished GenerateCommand.
-[13:05:01 DBG] Hosting stopping
-[13:05:01 INF] Application is shutting down...
-[13:05:01 DBG] Hosting stopped
+---------
 
 Comments:
