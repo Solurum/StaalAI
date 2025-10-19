@@ -13,6 +13,7 @@ StaalAI is a .NET global tool designed to iteratively run and combine LLM-driven
 - Incorporates build/test/code-analysis/pipeline outputs (“heat”) to guide improvements.
 - Strict, deterministic YAML protocol between the LLM and the tool to avoid ambiguity.
 - Edit modes to limit the scope of changes (All, OnlyCode, OnlyTests, OnlyDocumentation).
+- Heavy CI flow with asynchronous continuation via `staal continue`.
 
 ## Installation
 
@@ -152,17 +153,30 @@ Behavior:
   - `pipelineoutput` (e.g., CI/CD workflow logs)
   - `latest`         (default catch-all group)
 
-Examples:
+### continue
+
+Resumes a paused Heavy CI run and collects results (logs and artifacts) after the one-hour window.
+
+Usage:
 ```bash
-# Add a dotnet build log to the "build" group
-StaalAI add-heat -hf "/abs/logs/dotnet-build.log" -wd "/abs/repo" -hg build
-
-# Add test results to the "tests" group
-StaalAI add-heat -hf "/abs/logs/dotnet-test.log" -wd "/abs/repo" -hg tests
-
-# Add miscellaneous output to the default group "latest"
-StaalAI add-heat -hf "/abs/output/analysis.txt" -wd "/abs/repo"
+StaalAI continue [--repo-root <path>] [--no-fetch] [--timeout-min <int>] [-v|--verbose]
 ```
+
+Options:
+- `--repo-root <path>`     Optional; defaults to current directory.
+- `--no-fetch`             Optional; skip git fetch/pull.
+- `--timeout-min <int>`    Optional; override polling timeout when resuming.
+- `-v`, `--verbose`        Optional; extra details in console.
+
+Behavior:
+- Looks for `.heat/heavy_ci_pending.json` and `.heat/conversation.json`. If not found, prints “No paused Heavy CI found.” and exits with error.
+- Optionally fetches/pulls the remembered branch.
+- Checks external pipeline status. If still running, prints status and exits 0.
+- If completed:
+  - Downloads workflow logs and artifacts under `.heat/` (e.g., `.heat/ci_logs.zip`, `.heat/artifacts/...`).
+  - Generates `.heat/ci_summary.md` including outcome and failing steps.
+  - Removes `.heat/heavy_ci_pending.json`.
+  - Prints summary and exits with success/failure code.
 
 ## Working Directory and Safety Rules
 
@@ -193,6 +207,7 @@ You can add your own `iron.staal.txt` to scope and guide the AI for your reposit
 StaalAI --help
 StaalAI generate --help
 StaalAI add-heat --help
+StaalAI continue --help
 ```
 
 ## License

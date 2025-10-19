@@ -1,4 +1,4 @@
-﻿namespace Solurum.StaalAi
+namespace Solurum.StaalAi
 {
     using System.CommandLine.Builder;
     using System.CommandLine.Hosting;
@@ -30,7 +30,8 @@
             var rootCommand = new RootCommand("Intended to iteratively run and combine several LLM's and CI/CD test results for accurate code generation..")
             {
                 new GenerateCommand(),
-                new AddHeatCommand()
+                new AddHeatCommand(),
+                new ContinueCommand()
             };
 
             var isDebug = new Option<bool>(
@@ -72,7 +73,8 @@
                                             .AddEnvironmentVariables();
                     })
                     .UseCommandHandler<GenerateCommand, GenerateCommandHandler>()
-                    .UseCommandHandler<AddHeatCommand, AddHeatCommandHandler>();
+                    .UseCommandHandler<AddHeatCommand, AddHeatCommandHandler>()
+                    .UseCommandHandler<ContinueCommand, ContinueCommandHandler>();
             });
 
             return await builder.Build().InvokeAsync(args);
