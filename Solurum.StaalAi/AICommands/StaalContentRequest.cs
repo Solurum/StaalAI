@@ -75,9 +75,10 @@ namespace Solurum.StaalAi.AICommands
                     }
 
                     var fileContent = fs.File.ReadAllText(path);
+                    var normalized = NormalizeFileContent(fileContent);
 
                     // Wrap each file so multi-file responses are clearly segmented
-                    var wrapped = $"--- BEGIN {path} ---\n{fileContent}\n--- END {path} ---";
+                    var wrapped = $"--- BEGIN {path} ---\n{normalized}\n--- END {path} ---";
                     conversation.AddReplyToBuffer(wrapped, originalCommand);
                 }
                 catch (Exception ex)
@@ -139,6 +140,46 @@ namespace Solurum.StaalAi.AICommands
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Normalize file content to reduce token footprint without changing semantics.
+        /// - Normalize CRLF to LF
+        /// - Collapse runs of more than 2 blank lines to exactly 2
+        /// - Trim trailing spaces on each line
+        /// </summary>
+        private static string NormalizeFileContent(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return string.Empty;
+
+            // Normalize newlines
+            var text = input.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Trim trailing spaces and collapse blank lines
+            var lines = text.Split('\n');
+            var sb = new System.Text.StringBuilder(text.Length);
+            int blankRun = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].TrimEnd(' ', '\t');
+                bool isBlank = line.Length == 0;
+                if (isBlank)
+                {
+                    blankRun++;
+                    if (blankRun <= 2)
+                    {
+                        sb.Append('\n');
+                    }
+                }
+                else
+                {
+                    blankRun = 0;
+                    sb.Append(line);
+                    if (i < lines.Length - 1) sb.Append('\n');
+                }
+            }
+
+            return sb.ToString();
         }
     }
 

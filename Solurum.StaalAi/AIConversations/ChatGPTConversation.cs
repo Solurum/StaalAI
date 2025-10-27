@@ -28,12 +28,20 @@ namespace Solurum.StaalAi.AIConversations
     {
         private const int ChunkSize = 60000;
 
+        // --- Token budgeting ---
+        // Hard model cap observed in logs: 272,000 tokens total (messages + response).
+        private const int ModelContextLimitTokens = 272_000;
+        // Keep headroom for model output and safety cushion.
+        private const int ReservedOutputTokens = 8_192;
 
         // --- Pruning knobs ---
         private const int ApproxCharsPerToken = 4;       // coarse heuristic
-        private const int MaxTokenBudget = 380_000; // start pruning above this
-        private const int TargetTokenBudget = 320_000; // prune down to about this
+        private const int MaxTokenBudget = ModelContextLimitTokens - ReservedOutputTokens; // prune when exceeding this
+        private const int TargetTokenBudget = ModelContextLimitTokens - ReservedOutputTokens - 32_000; // prune down to about this
         private const int PreserveNewestTurns = 6;       // keep at least N most recent messages
+
+        // When sending, include only a small tail of prior context to keep continuity.
+        private const int ContextTailTurnsForSend = 6;
 
         private readonly string DefaultModel = "gpt-5";
         private readonly ILogger logger;
@@ -134,7 +142,7 @@ namespace Solurum.StaalAi.AIConversations
         }
 
         /// <summary>
-        /// Sends the buffered conversation (after pruning) and queues the assistant's response for background processing.
+        /// Sends the buffered conversation in safe-sized batches and queues the assistant's response for background processing.
         /// </summary>
         /// <returns>True if content was sent; otherwise false when there was nothing to send.</returns>
         /// <exception cref="InvalidOperationException">Thrown when the conversation was not started.</exception>
@@ -144,14 +152,30 @@ namespace Solurum.StaalAi.AIConversations
 
             if (history.Count <= lastSentMessageIndex) return false; // nothing new since last send
 
-            PruneHistoryIfNeeded();
+            // Build a window to send that fits within the model budget with output reserve.
+            var sendHistory = BuildSendHistory(ReservedOutputTokens, out int newLastSentExclusive);
+            if (newLastSentExclusive <= lastSentMessageIndex && sendHistory.Count == 0)
+            {
+                // Nothing to send (shouldn't happen)
+                return false;
+            }
 
-            logger.LogDebug("Sending new chat history, waiting on response...");
-            ChatCompletionOptions opt = new ChatCompletionOptions();
+            logger.LogDebug("Sending chat window, waiting on response...");
+            var opt = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = ReservedOutputTokens
+            };
             ClientResult<ChatCompletion> completionRsp;
             try
             {
-                completionRsp = chat.CompleteChat(history);
+                completionRsp = chat.CompleteChat(sendHistory, opt);
+            }
+            catch (ClientResultException cre) when (IsContextLengthExceeded(cre))
+            {
+                logger.LogWarning("context_length_exceeded detected. Rebuilding smaller window and retrying once.");
+                // Rebuild with zero context tail to force minimal window
+                var minimalHistory = BuildSendHistory(ReservedOutputTokens, out newLastSentExclusive, contextTailOverride: 0);
+                completionRsp = chat.CompleteChat(minimalHistory, opt);
             }
             catch (Exception)
             {
@@ -159,7 +183,9 @@ namespace Solurum.StaalAi.AIConversations
                 MakeNewChat();
                 AddReplyToBuffer("WARNING! Our previous conversation failed with an exception. I suggest handling the files one by one so responses are quicker.", "WARNING");
 
-                completionRsp = chat.CompleteChat(history);
+                // Try again with fresh client and minimal window to be safe
+                var minimalHistory = BuildSendHistory(ReservedOutputTokens, out newLastSentExclusive, contextTailOverride: 0);
+                completionRsp = chat.CompleteChat(minimalHistory, opt);
             }
 
             var completion = completionRsp.Value;
@@ -167,8 +193,8 @@ namespace Solurum.StaalAi.AIConversations
 
             apiCalls++;
 
-            // Count new user bytes since last call
-            for (int i = lastSentMessageIndex; i < history.Count; i++)
+            // Count only the user bytes we actually sent in this batch
+            for (int i = lastSentMessageIndex; i < Math.Min(newLastSentExclusive, history.Count); i++)
             {
                 if (history[i] is UserChatMessage um)
                 {
@@ -178,8 +204,6 @@ namespace Solurum.StaalAi.AIConversations
             }
 
             var assistantText = ExtractAssistantTopText(completion);
-            //logger.LogDebug($"Raw Response: {assistantText}");
-
             bytesOut += Encoding.UTF8.GetByteCount(assistantText);
 
             try
@@ -195,7 +219,7 @@ namespace Solurum.StaalAi.AIConversations
 
             // Preserve full assistant content (including non-text parts) in history
             history.Add(new AssistantChatMessage(completion));
-            lastSentMessageIndex = history.Count;
+            lastSentMessageIndex = newLastSentExclusive;
 
             // Hand the raw text to background processing to avoid inline recursion
             if (!string.IsNullOrEmpty(assistantText))
@@ -232,11 +256,23 @@ namespace Solurum.StaalAi.AIConversations
             // Use the initial prompt as SYSTEM
             history.Add(new SystemChatMessage(initialPrompt));
 
-            PruneHistoryIfNeeded();
-
-            // First round to open the session
+            // First round to open the session (small enough, but still reserve output)
             logger.LogInformation("Initial Prompt Sent, waiting on response...");
-            var completionRsp = chat.CompleteChat(history);
+            var opt = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = ReservedOutputTokens
+            };
+            ClientResult<ChatCompletion> completionRsp;
+            try
+            {
+                completionRsp = chat.CompleteChat(history, opt);
+            }
+            catch (ClientResultException cre) when (IsContextLengthExceeded(cre))
+            {
+                logger.LogWarning("context_length_exceeded on initial prompt. Trimming and retrying once.");
+                AggressivePruneToTarget();
+                completionRsp = chat.CompleteChat(history, opt);
+            }
             var completion = completionRsp.Value;
             logger.LogInformation("Initial Prompt response received.");
 
@@ -361,12 +397,7 @@ namespace Solurum.StaalAi.AIConversations
 
             var duration = (stoppedAt ?? DateTimeOffset.UtcNow) - (startedAt ?? DateTimeOffset.UtcNow);
 
-            // Rough $ estimate (adjust if your account differs)
-            //const decimal inputPerM = 1.25m;   // USD per 1M input tokens (GPT-5)
-            //const decimal outputPerM = 10.00m; // USD per 1M output tokens (GPT-5)
-
             // Rough $ estimate (GPT-5-nano)
-            // Source: OpenAI pricing page (gpt-5 product page)
             const decimal inputPerM = 0.05m;  // USD per 1M input tokens (GPT-5-nano)
             const decimal outputPerM = 0.40m;  // USD per 1M output tokens (GPT-5-nano)
 
@@ -383,7 +414,7 @@ namespace Solurum.StaalAi.AIConversations
         }
 
         // ------------------------
-        // Pruning implementation
+        // Pruning implementation and window builder
         // ------------------------
         private void PruneHistoryIfNeeded()
         {
@@ -414,6 +445,108 @@ namespace Solurum.StaalAi.AIConversations
 
             if (lastSentMessageIndex > history.Count)
                 lastSentMessageIndex = history.Count;
+        }
+
+        private void AggressivePruneToTarget()
+        {
+            int approxTokens = ApproximateTokens(history);
+            int systemIndex = history.FindIndex(m => m is SystemChatMessage);
+            if (systemIndex < 0) systemIndex = 0;
+
+            // Remove oldest messages after system until we reach TargetTokenBudget
+            int i = Math.Max(systemIndex + 1, 0);
+            while (i < history.Count - 2 && approxTokens > TargetTokenBudget)
+            {
+                var removed = history[i];
+                approxTokens -= ApproximateTokens(removed);
+                history.RemoveAt(i);
+            }
+
+            if (lastSentMessageIndex > history.Count)
+                lastSentMessageIndex = history.Count;
+        }
+
+        private List<ChatMessage> BuildSendHistory(int reserveOutputTokens, out int newLastSentExclusive, int? contextTailOverride = null)
+        {
+            int limit = ModelContextLimitTokens - Math.Max(0, reserveOutputTokens);
+
+            var result = new List<ChatMessage>(64);
+            int tokensUsed = 0;
+
+            int systemIndex = history.FindIndex(m => m is SystemChatMessage);
+            if (systemIndex < 0) systemIndex = 0;
+
+            // Always include the system message if present.
+            if (history.Count > 0)
+            {
+                var sys = history[systemIndex];
+                result.Add(sys);
+                tokensUsed += ApproximateTokens(sys);
+            }
+
+            // Add a small tail of prior context (already-sent messages).
+            int ctxTail = contextTailOverride ?? ContextTailTurnsForSend;
+            int ctxStart = Math.Max(systemIndex + 1, Math.Min(lastSentMessageIndex, history.Count) - ctxTail);
+            for (int i = ctxStart; i < lastSentMessageIndex; i++)
+            {
+                int t = ApproximateTokens(history[i]);
+                if (tokensUsed + t > limit) break;
+                result.Add(history[i]);
+                tokensUsed += t;
+            }
+
+            // Add as many unsent messages as fit.
+            int iUns = lastSentMessageIndex;
+            int lastIncl = lastSentMessageIndex;
+            while (iUns < history.Count)
+            {
+                int t = ApproximateTokens(history[iUns]);
+                if (tokensUsed + t > limit) break;
+                result.Add(history[iUns]);
+                tokensUsed += t;
+                lastIncl = iUns + 1; // exclusive
+                iUns++;
+            }
+
+            // Ensure we make progress: if no unsent message fit, trim context and try to add at least one.
+            if (lastIncl == lastSentMessageIndex && lastSentMessageIndex < history.Count)
+            {
+                // Clear all except system, then try to add one unsent.
+                result.RemoveRange(1, result.Count - 1);
+                tokensUsed = ApproximateTokens(result[0]);
+
+                int t = ApproximateTokens(history[lastSentMessageIndex]);
+                if (tokensUsed + t <= limit)
+                {
+                    result.Add(history[lastSentMessageIndex]);
+                    tokensUsed += t;
+                    lastIncl = lastSentMessageIndex + 1;
+                }
+                else
+                {
+                    // Fallback: forcibly send only the first unsent message alone (should not happen with our chunking).
+                    result.Clear();
+                    if (history.Count > 0)
+                    {
+                        var sys = history[systemIndex];
+                        result.Add(sys);
+                    }
+                    result.Add(history[lastSentMessageIndex]);
+                    lastIncl = lastSentMessageIndex + 1;
+                }
+            }
+
+            newLastSentExclusive = lastIncl;
+            return result;
+        }
+
+        private static bool IsContextLengthExceeded(ClientResultException ex)
+        {
+            // Fallback string check; SDK may not expose error code directly across versions.
+            var msg = ex?.Message ?? string.Empty;
+            return msg.IndexOf("context_length_exceeded", StringComparison.OrdinalIgnoreCase) >= 0
+                || msg.IndexOf("messages resulted in", StringComparison.OrdinalIgnoreCase) >= 0
+                || msg.IndexOf("Input tokens exceed the configured limit", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static int ApproximateTokens(IEnumerable<ChatMessage> messages)
