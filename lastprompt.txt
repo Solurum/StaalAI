@@ -1,66 +1,22 @@
-Title: Further Improve yaml protocol
+Title: Fix Token Limit Exceeded
 
 Description:
-LLM's sending back invalid responses again, causing critical failures.
+We're getting the following error on some repositories. Usually when requesting content of files. Please validate if I'm splitting up my content correctly and if we need to perform a more accurate cleanup.
+Please fix this.
 
-------------
-Issue One:
+[14:05:01 WRN] OpenAPI Server Timed Out. Possibly waiting too long on response or network issues.
+[14:05:19 ERR] Critical Error while handling ChatGPT response. Stopping.
+System.ClientModel.ClientResultException: HTTP 400 (invalid_request_error: context_length_exceeded)
+Parameter: messages
 
-Either update the STAAL_CONTENT_CHANGE logic and the poco's to be able to handle originalText replacement into newText. Or preferrably for now update the YamlNormalization to fix the message we received into what is actually expected based on the POCO.
-
-Invalid response we received:
-
-type: STAAL_CONTENT_CHANGE
-filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiHeavyRequest.cs
-originalText: |-
-  blablabla
-newText: |-
-  blablaNewNew
-
----------
-
-Issue Two:
-
-The initial sent message also ended up with a repair message getting sent. Check if we can normalize this as well to fit the POCO's.
-
-command: STAAL_STATUS
-args:
-  message: |
-    Ready. Plan:
-    - Inspect iron.staal.txt and current CI-related command implementations.
-    - Review StaalCiHeavyRequest, StaalCiLightRequest, StaalContinue, Program, and README.
-    - Design and implement Heavy CI orchestration, GitHub provider, and continue CLI command.
-    - Add tests and update README.
-    - Run CI light to ensure compilation.
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/iron.staal.txt
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAiTests/iron.staal.txt
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiHeavyRequest.cs
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalCiLightRequest.cs
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AICommands/StaalContinue.cs
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/Program.cs
---- 
-command: STAAL_CONTENT_REQUEST
-args:
-  filePath: /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/README.md
-
----------
+Input tokens exceed the configured limit of 272000 tokens. Your messages resulted in 275155 tokens. Please reduce the length of the messages.
+   at OpenAI.ClientPipelineExtensions.ProcessMessage(ClientPipeline pipeline, PipelineMessage message, RequestOptions options)
+   at OpenAI.Chat.ChatClient.CompleteChat(BinaryContent content, RequestOptions options)
+   at OpenAI.Chat.ChatClient.CompleteChat(IEnumerable`1 messages, ChatCompletionOptions options, CancellationToken cancellationToken)
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.SendNextBuffer() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 162
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.HandleResponses(String response) in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 490
+   at Solurum.StaalAi.AIConversations.ChatGPTConversation.<>c__DisplayClass28_0.<Start>b__0() in /home/runner/work/StaalAI/StaalAI/Solurum.StaalAi/AIConversations/ChatGPTConversation.cs:line 297
+[14:05:19 INF] Application is shutting down...
+PS C:\Users\JANS>
 
 Comments:
