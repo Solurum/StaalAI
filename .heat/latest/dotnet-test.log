@@ -8,4 +8,4 @@ VSTest version 17.14.1 (x64)
 Starting test execution, please wait...
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:    71, Skipped:     0, Total:    71, Duration: 687 ms - Solurum.StaalAiTests.dll (net8.0)
+Passed!  - Failed:     0, Passed:    71, Skipped:     0, Total:    71, Duration: 803 ms - Solurum.StaalAiTests.dll (net8.0)
