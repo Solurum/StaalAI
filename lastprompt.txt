@@ -1,13 +1,23 @@
-Title: Fix potential infinite loop, LLM not understanding finish command
+Title: Fix potential infinite loop, LLM not understanding finish command and sometimes stuck reading files.
 
 Description:
-LLM's sometimes keep returning status messages saying they're done, completed the work or finished. But thats invalid, they should understand to send back the STAAL_FINISH_OK command with a PR comment included such as specifiek in AllowedCommands.txt.
+I added code to AIGuardrails
 
-I want you to create a small reminderprompt.txt that we can include with our response to a status message every 10 status messages we receives. Make sure to add some unit tests for that new code as well. The reminderprompt can be based on what's inside MasterPrompt, just make sure it focuses on an LLM that's already busy and makes it clear the tool is just sending a small reminder on how to proceed including what to send if it finished OK or NOK.
 
-Don't write example commands in the reminder, because you are currently using the tool for right now, example commands may interfere.
 
-You'll likely want to work in the AIGuardRails files.
-Remeber to use STAAL_CONTENT_CHANGE to make actual changes to the code and not just keep reading files!
+      if (command.GetType() == typeof(StaalStatus))
+      {
+
+          if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
+          {
+              logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
+              conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
+              currentStatusMessageBeforeWarning = 0;
+          }
+      }
+
+
+Can you verify my changes and add some unit tests for this new code?
+
 
 Comments:

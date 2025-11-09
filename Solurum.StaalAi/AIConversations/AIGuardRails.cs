@@ -27,6 +27,9 @@ namespace Solurum.StaalAi.AIConversations
         int maxConsecutiveValidateErrors = 3;
         int currentConsecutiveValidateErrors = 0;
 
+        int maxStatusMessageBeforeWarning = 10;
+        int currentStatusMessageBeforeWarning = 0;
+
         int maxResponsesWithoutDocumentEditsStop = 20;
         int maxResponsesWithoutDocumentEditsWarning = 10;
         int currentResponsesWithoutDocumentEdits = 0;
@@ -155,6 +158,17 @@ namespace Solurum.StaalAi.AIConversations
                 {
                     hadDocumentEdits = true;
                 }
+
+                if (command.GetType() == typeof(StaalStatus))
+                {
+
+                    if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
+                    {
+                        logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
+                        conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
+                        currentStatusMessageBeforeWarning = 0;
+                    }
+                }
             }
 
             if (!hadDocumentEdits)
@@ -172,8 +186,8 @@ namespace Solurum.StaalAi.AIConversations
             }
             else if (currentResponsesWithoutDocumentEdits >= maxResponsesWithoutDocumentEditsWarning)
             {
-                logger.LogWarning($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes.");
-                conversation.AddReplyToBuffer($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes. Please consider the available commands again: " + fs.File.ReadAllText("AllowedCommands.txt"), "WARNING");
+                logger.LogWarning($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes. Remember to use STAAL_CONTENT_CHANGE");
+                conversation.AddReplyToBuffer($"WARNING! The last {currentResponsesWithoutDocumentEdits} responses did not contain any actual content change commands. I will force stop after {maxResponsesWithoutDocumentEditsStop} responses without actual code changes. Remember to use STAAL_CONTENT_CHANGE.", "WARNING");
             }
             else
             {
