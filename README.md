@@ -1,39 +1,26 @@
-# StaalAI (Solurum.StaalAi)
+# StaalAI
 
-StaalAI is a .NET global tool that coordinates iterative code changes driven by Large Language Models (LLMs), enriched with CI/CD output (“heat”) to improve accuracy and relevance. It operates within a bounded working directory, applying strict safeguards and rules.
+This repository contains the StaalAI tooling and related GitHub workflows.
 
-- Primary package and CLI: Solurum.StaalAi (command: `StaalAI`)
-- Target framework: .NET 8.0
-- Purpose: Iteratively generate or update code, tests, and/or documentation, using structured context and CI outputs.
+## StaalAI-Execute workflow behavior
 
-## Projects
+When a pull request receives a comment containing the phrase `StaalAI: Execute` and the PR is labeled `StaalAI` by a user with write (or higher) permission, the `.github/workflows/StaalAI-Execute.yml` workflow runs.
 
-- Solurum.StaalAi (tool) — see the detailed guide: [Solurum.StaalAi/README.md](Solurum.StaalAi/README.md)
+The workflow:
+- Collects all open (unresolved) PR review threads and formats them (with file paths, authors, URLs, and comment bodies).
+- Backs up `lastprompt.txt` to `lastprompt_bak.txt`.
+- Temporarily rewrites `lastprompt.txt` by:
+  - Adding a note at the top: “Prompt was already executed and there are open review remarks to tackle.”
+  - Appending the original prompt content.
+  - Adding an “Open Review Remarks” section containing the unresolved remarks.
+- Executes `StaalAI generate` with the modified prompt.
+- Restores the original `lastprompt.txt` from the backup before committing any changes.
+- Commits and pushes any generated changes back to the PR branch, then posts a status comment on the PR.
 
-## Quick Start
+If there are no open review remarks, the workflow runs StaalAI as before without modifying `lastprompt.txt`.
 
-1) Install the global tool:
+Requirements:
+- A repository secret `PAT` with permissions to read PR metadata and push to the branch.
+- A secret `OPENAPITOKEN` and an optional variable `OPENAPIMODEL` for StaalAI execution.
 
-```bash
-dotnet tool install -g Solurum.StaalAi
-```
-
-2) Configure environment variables (example):
-
-```bash
-# PowerShell
-$env:StaalOpenApiToken="your-openai-api-key"
-$env:StaalOpenApiModel="gpt-4o-mini"
-
-# bash/zsh
-export StaalOpenApiToken="your-openai-api-key"
-export StaalOpenApiModel="gpt-4o-mini"
-```
-
-3) Run help:
-
-```bash
-StaalAI --help
-```
-
-For full usage, scenarios, and examples, consult [Solurum.StaalAi/README.md](Solurum.StaalAi/README.md).
+For details, see `.github/workflows/StaalAI-Execute.yml`.

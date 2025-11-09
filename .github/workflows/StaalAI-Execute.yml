@@ -91,6 +91,92 @@ jobs:
           dotnet tool install Solurum.StaalAI --global
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
+      - name: Collect open review remarks (unresolved review threads)
+        id: collect_review_remarks
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          PR_NUMBER="${{ github.event.issue.number }}"
+
+          # Build GraphQL query to fetch review threads
+          read -r -d '' QUERY << 'GRAPHQL' || true
+          query($owner:String!, $repo:String!, $pr:Int!) {
+            repository(owner:$owner, name:$repo) {
+              pullRequest(number:$pr) {
+                reviewThreads(first: 100) {
+                  nodes {
+                    isResolved
+                    path
+                    comments(first: 100) {
+                      nodes {
+                        author { login }
+                        body
+                        url
+                        createdAt
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          GRAPHQL
+
+          RESP=$(gh api graphql -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" -f query="$QUERY")
+
+          mkdir -p "$GITHUB_WORKSPACE/.github"
+          REMARKS_FILE="$GITHUB_WORKSPACE/.github/_open_review_remarks.txt"
+          : > "$REMARKS_FILE"
+
+          COUNT=$(echo "$RESP" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length')
+          if [ "$COUNT" -gt 0 ]; then
+            echo "$RESP" | jq -r '
+              .data.repository.pullRequest.reviewThreads.nodes
+              | map(select(.isResolved==false))
+              | .[]
+              | "File: \(.path)\n"
+                + (
+                    .comments.nodes
+                    | map(" - [\(.author.login)] \(.url)\n   \(.body|gsub("\r";"") )")
+                    | join("\n")
+                  )
+                + "\n"
+            ' >> "$REMARKS_FILE"
+            echo "has_open_remarks=true" >> "$GITHUB_OUTPUT"
+            echo "remarks_file=$REMARKS_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_open_remarks=false" >> "$GITHUB_OUTPUT"
+            echo "remarks_file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare lastprompt with open review remarks
+        if: steps.collect_review_remarks.outputs.has_open_remarks == 'true'
+        run: |
+          set -euo pipefail
+          ORIGINAL="$GITHUB_WORKSPACE/lastprompt.txt"
+          BACKUP="$GITHUB_WORKSPACE/lastprompt_bak.txt"
+          REMARKS_FILE="${{ steps.collect_review_remarks.outputs.remarks_file }}"
+
+          if [ ! -f "$ORIGINAL" ]; then
+            echo "lastprompt.txt not found at $ORIGINAL" >&2
+            exit 1
+          fi
+
+          cp "$ORIGINAL" "$BACKUP"
+          {
+            echo "NOTE: Prompt was already executed and there are open review remarks to tackle."
+            echo
+            cat "$BACKUP"
+            echo
+            echo "-----"
+            echo "Open Review Remarks:"
+            echo
+            cat "$REMARKS_FILE"
+          } > "$ORIGINAL"
+
       - name: Run StaalAI generate
         env:
           StaalOpenApiToken: ${{ secrets.OPENAPITOKEN }}
@@ -100,6 +186,19 @@ jobs:
             -pf "$GITHUB_WORKSPACE/lastprompt.txt" \
             -wd "$GITHUB_WORKSPACE" \
             --debug
+
+      - name: Restore original lastprompt before commit
+        run: |
+          set -euo pipefail
+          ORIGINAL="$GITHUB_WORKSPACE/lastprompt.txt"
+          BACKUP="$GITHUB_WORKSPACE/lastprompt_bak.txt"
+          if [ -f "$BACKUP" ]; then
+            rm -f "$ORIGINAL"
+            mv "$BACKUP" "$ORIGINAL"
+            echo "Restored original lastprompt.txt"
+          else
+            echo "No backup found; nothing to restore."
+          fi
 
       - name: Commit and push changes (if any)
         id: commit
