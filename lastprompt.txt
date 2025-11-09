@@ -1,9 +1,9 @@
-Title: Adjust StaalAI CI/CD Pipeline: uncompleted review remarks
+Title: Fix potential infinite loop, LLM not understanding finish command
 
 Description:
-I want you to change the CICD Pipeline that executes the StaalAI tool after a PR gets a remark with the execute command.
-I want you to check if there are open review remarks, then grab those with the information needed (like file location). Format it nicely for a plain text file and then change the lastpromp.txt. Add a line of text at the top saying the Prompt was already executed and there are open review remarks to tackle. Then add to the bottom all those review remarks.  I suggest you first make a lastpromp_bak.txt file with the old content (original prompt) and then before doing a commit & push with any changes have a step that deleted lastprompt.txt and renames lastptompt_bak.txt to lastprompt.txt (restoring the original lastprompt file). That way, we don't need the complexities of constantly checking if a review remark was already added to the lastprompt.txt.
+LLM's sometimes keep returning status messages saying they're done, completed the work or finished. But thats invalid, they should understand to send back the STAAL_FINISH_OK command with a PR comment included such as specifiek in AllowedCommands.txt.
 
-If there are no open review remarks, then just run as before.
+I want you to review the AllowedCommands.txt and see if we need to make changes there so it's more understandable for LLM's.
+I also want you to create a reminderprompt.txt that we can include with our response to a status message every 5 status messages we receives. Make sure to add some unit tests for that new code as well. The reminderprompt can be based on what's inside MasterPrompt, just make sure it focuses on an LLM that's already busy and makes it clear the tool is just sending a small reminder including what to send if it finished OK or NOK.
 
 Comments:
