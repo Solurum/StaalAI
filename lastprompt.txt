@@ -1,23 +1,11 @@
-Title: Fix potential infinite loop, LLM not understanding finish command and sometimes stuck reading files.
+Title: Actually Send Back the PR message from STAAL_FINISH_OK
 
 Description:
-I added code to AIGuardrails
+I just noticed that when the StaalAI Execute workflow  stops it doesn't actually provide the PR message that is returned when STAAL_FINISH_OK  is sent by the LLM. Can you make the necessary code changes both in the STAAL_FINISH_OK logic to save the PR message from the LLM to a text file. Then in the pipeline yml make changes to use that as the PR text.
 
+I suggest a new argument in the tool where a user can provide the path to a text file to hold the AI Summary. Then use that path to store the STAAL_FINISH_OK pr message. And use that path in the workflow to make the PR.
 
-
-      if (command.GetType() == typeof(StaalStatus))
-      {
-
-          if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
-          {
-              logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
-              conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
-              currentStatusMessageBeforeWarning = 0;
-          }
-      }
-
-
-Can you verify my changes and add some unit tests for this new code?
-
+Make sure to add Unit Tests for the new logic.
+Remember to use STAAL_CONTENT_CHANGE to make actual file changes.
 
 Comments:
