@@ -1,23 +1,7 @@
-Title: Fix potential infinite loop, LLM not understanding finish command and sometimes stuck reading files.
+Title: NormalizeYaml extend to support absoluteFilePath for Request Data
 
 Description:
-I added code to AIGuardrails
-
-
-
-      if (command.GetType() == typeof(StaalStatus))
-      {
-
-          if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
-          {
-              logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
-              conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
-              currentStatusMessageBeforeWarning = 0;
-          }
-      }
-
-
-Can you verify my changes and add some unit tests for this new code?
-
+When requesting file content, LLM's sometimes use absoluteFilePath as the argument instead of filepath or filepaths.
+Look if we can support this, best effort.
 
 Comments:
