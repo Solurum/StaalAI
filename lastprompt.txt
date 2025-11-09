@@ -6,6 +6,6 @@ I just noticed that when the StaalAI Execute workflow  stops it doesn't actually
 I suggest a new argument in the tool where a user can provide the path to a text file to hold the AI Summary. Then use that path to store the STAAL_FINISH_OK pr message. And use that path in the workflow to make the PR.
 
 Make sure to add Unit Tests for the new logic.
-Remember to use STAAL_CONTENT_CHANGE to make actual file changes.
+I suggest asking for multiple file contents at the same time to avoid timing out. You're only allowed 20 calls without performing STAAL_CONTENT_CHANGE to make file changes.
 
 Comments:
