@@ -29,6 +29,12 @@ namespace Solurum.StaalAi.Tests.Conversations
             return (sut, convo, fs, file);
         }
 
+        private static string StatusYaml(string msg = "I'm ready.") =>
+            "type: STAAL_STATUS\nstatusMsg: |-\n  " + msg + "\n";
+
+        private static string ContentChangeYaml(string path = "/abs/A.cs", string content = "namespace X { }") =>
+            "type: STAAL_CONTENT_CHANGE\nfilePath: " + path + "\nnewContent: |-\n  " + content.Replace("\n", "\n  ") + "\n";
+
         [TestMethod]
         public void Validate_Should_Warn_With_Canonical_When_Normalization_Applied()
         {
@@ -68,6 +74,60 @@ namespace Solurum.StaalAi.Tests.Conversations
             Action act = () => sut.ValidateAndParseResponse(invalid);
             act.Should().Throw<InvalidOperationException>()
                .WithMessage("*Hard Stop - AI Replied with Invalid Data 3 times*");
+        }
+
+        [TestMethod]
+        public void Status_No_Warning_Before_Threshold()
+        {
+            var (sut, convo, _, _) = CreateSut();
+
+            // Send 9 unique STATUS messages -> no "busy" warning yet
+            for (int i = 1; i <= 9; i++)
+            {
+                sut.ValidateAndParseResponse(StatusYaml($"msg-{i}")).Should().NotBeNull();
+            }
+
+            convo.Verify(c => c.AddReplyToBuffer(
+                    It.Is<string>(s => s.Contains("You've been busy for a while", StringComparison.OrdinalIgnoreCase)),
+                    "WARNING"),
+                Times.Never);
+        }
+
+        [TestMethod]
+        public void Status_Warning_At_Threshold_And_Reset()
+        {
+            var (sut, convo, _, _) = CreateSut();
+
+            // First 9 STATUS messages -> no "busy" warning
+            for (int i = 1; i <= 9; i++)
+            {
+                sut.ValidateAndParseResponse(StatusYaml($"first-batch-{i}")).Should().NotBeNull();
+            }
+
+            // 10th -> expect 1 "busy" warning and status counter reset
+            sut.ValidateAndParseResponse(StatusYaml("first-batch-10")).Should().NotBeNull();
+            convo.Verify(c => c.AddReplyToBuffer(
+                    It.Is<string>(s => s.Contains("You've been busy for a while", StringComparison.OrdinalIgnoreCase)),
+                    "WARNING"),
+                Times.Once);
+
+            // Insert a content change to reset the "no document edits" counter,
+            // so we don't hit the 20 non-edit hard stop while testing the second busy warning.
+            sut.ValidateAndParseResponse(ContentChangeYaml("/abs/reset.cs", "class Reset {}")).Should().NotBeNull();
+
+            // Next 9 -> no additional "busy" warnings yet
+            for (int i = 11; i <= 19; i++)
+            {
+                sut.ValidateAndParseResponse(StatusYaml($"second-batch-{i}")).Should().NotBeNull();
+            }
+
+            // 20th overall STATUS (10 after reset of status counter) -> second "busy" warning
+            sut.ValidateAndParseResponse(StatusYaml("second-batch-20")).Should().NotBeNull();
+
+            convo.Verify(c => c.AddReplyToBuffer(
+                    It.Is<string>(s => s.Contains("You've been busy for a while", StringComparison.OrdinalIgnoreCase)),
+                    "WARNING"),
+                Times.Exactly(2));
         }
     }
 }

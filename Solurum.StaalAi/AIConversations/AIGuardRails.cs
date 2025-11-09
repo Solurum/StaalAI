@@ -124,7 +124,7 @@ namespace Solurum.StaalAi.AIConversations
 
             If your previous message was progress text, convert it to:
             type: STAAL_STATUS
-            statusMsg: |- 
+            statusMsg: |-
               (your lines here)
 
             Please use only the following command types:
@@ -161,8 +161,9 @@ namespace Solurum.StaalAi.AIConversations
 
                 if (command.GetType() == typeof(StaalStatus))
                 {
-
-                    if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
+                    // Increment first, then compare to threshold. Warn and reset when threshold reached.
+                    currentStatusMessageBeforeWarning++;
+                    if (currentStatusMessageBeforeWarning >= maxStatusMessageBeforeWarning)
                     {
                         logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
                         conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
