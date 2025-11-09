@@ -8,5 +8,6 @@ I want you to create a small reminderprompt.txt that we can include with our res
 Don't write example commands in the reminder, because you are currently using the tool for right now, example commands may interfere.
 
 You'll likely want to work in the AIGuardRails files.
+Remeber to use STAAL_CONTENT_CHANGE to make actual changes to the code and not just keep reading files!
 
 Comments:
