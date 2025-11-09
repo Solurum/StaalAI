@@ -1,9 +1,23 @@
-Title: Adjust StaalAI CI/CD Pipeline: uncompleted review remarks
+Title: Fix potential infinite loop, LLM not understanding finish command and sometimes stuck reading files.
 
 Description:
-I want you to change the CICD Pipeline that executes the StaalAI tool after a PR gets a remark with the execute command.
-I want you to check if there are open review remarks, then grab those with the information needed (like file location). Format it nicely for a plain text file and then change the lastpromp.txt. Add a line of text at the top saying the Prompt was already executed and there are open review remarks to tackle. Then add to the bottom all those review remarks.  I suggest you first make a lastpromp_bak.txt file with the old content (original prompt) and then before doing a commit & push with any changes have a step that deleted lastprompt.txt and renames lastptompt_bak.txt to lastprompt.txt (restoring the original lastprompt file). That way, we don't need the complexities of constantly checking if a review remark was already added to the lastprompt.txt.
+I added code to AIGuardrails
 
-If there are no open review remarks, then just run as before.
+
+
+      if (command.GetType() == typeof(StaalStatus))
+      {
+
+          if (maxStatusMessageBeforeWarning >= currentStatusMessageBeforeWarning++)
+          {
+              logger.LogWarning($"WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.");
+              conversation.AddReplyToBuffer("WARNING! You've been busy for a while. Gentle Reminder to use STAAL_CONTENT_CHANGE to make file changes and STAAL_FINISH_OK when done.", "WARNING");
+              currentStatusMessageBeforeWarning = 0;
+          }
+      }
+
+
+Can you verify my changes and add some unit tests for this new code?
+
 
 Comments:
